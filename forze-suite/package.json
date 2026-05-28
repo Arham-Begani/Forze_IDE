@@ -1,0 +1,25 @@
+{
+  "name": "forze-suite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Forze IDE — The Sovereign OS for Startup Founders",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "desktop": "pnpm --filter @forze/desktop dev",
+    "mcp": "pnpm --filter @forze/mcp-server dev",
+    "web": "pnpm --filter @forze/web dev",
+    "clean": "pnpm -r exec rm -rf node_modules dist .next .turbo target"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "@types/node": "^20.14.10"
+  }
+}
