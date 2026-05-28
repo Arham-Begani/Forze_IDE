@@ -1,14 +1,16 @@
 import type { ReactNode } from 'react';
+import './globals.css';
 
 export const metadata = {
-  title: 'Forge',
-  description: 'Forge — the cloud companion for the Forze IDE.',
+  title: 'VIBECODE — The OS for Builders',
+  description:
+    'VIBECODE — premium AI-native workspace for founders, indie hackers, and builders.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className="dark">
+      <body className="bg-bg-base text-ink antialiased">{children}</body>
     </html>
   );
 }
