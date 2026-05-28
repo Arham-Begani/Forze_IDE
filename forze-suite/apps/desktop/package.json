@@ -1,0 +1,46 @@
+{
+  "name": "@forze/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Forze IDE desktop shell — Tauri v2 + React + Monaco.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'eslint placeholder'"
+  },
+  "dependencies": {
+    "@forze/agents": "workspace:*",
+    "@forze/shared": "workspace:*",
+    "@forze/database": "workspace:*",
+    "@monaco-editor/react": "^4.6.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.0.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0",
+    "cmdk": "^1.0.0",
+    "lucide-react": "^0.460.0",
+    "monaco-editor": "^0.50.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-resizable-panels": "^2.1.2",
+    "zod": "^3.23.8",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.3.4"
+  }
+}
