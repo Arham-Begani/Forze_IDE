@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "Forze IDE",
+  "version": "0.1.0",
+  "identifier": "app.forze.ide",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Forze IDE",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://*.supabase.co https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'; font-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "The Sovereign OS for Startup Founders.",
+    "longDescription": "Forze IDE — Tauri-based desktop development environment with delegated cloud OAuth, MCP daemon, and offline-first SQLite cache."
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}
