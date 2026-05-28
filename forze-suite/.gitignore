@@ -1,0 +1,29 @@
+node_modules
+dist
+build
+.next
+.turbo
+out
+coverage
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.local
+.env.*.local
+
+# Rust / Tauri
+target
+**/*.rs.bk
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/gen
+
+# SQLite local cache
+*.sqlite
+*.sqlite-journal
+*.db
+
+# IDE
+.idea
+.vscode/*
+!.vscode/extensions.json
