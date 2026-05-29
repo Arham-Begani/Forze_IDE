@@ -1,67 +1,65 @@
-import {
-  Files,
-  Search,
-  GitBranch,
-  Bot,
-  Megaphone,
-  Sparkles,
-  ShieldCheck,
-  Settings,
-  type LucideIcon,
-} from 'lucide-react';
-import { useWorkbench, type ActivityId } from '../workbench/store';
-
-interface Item {
-  id: ActivityId;
-  label: string;
-  icon: LucideIcon;
-  hint?: string;
-}
-
-const PRIMARY: Item[] = [
-  { id: 'explorer', label: 'Files', icon: Files, hint: 'Ctrl+Shift+E' },
-  { id: 'search', label: 'Search', icon: Search },
-  { id: 'source-control', label: 'Source Control', icon: GitBranch, hint: 'Ctrl+Shift+G' },
-  { id: 'agents', label: 'Agents', icon: Bot, hint: 'Ctrl+Shift+A' },
-  { id: 'social', label: 'Social', icon: Megaphone },
-  { id: 'vibe', label: 'Vibe Canvas', icon: Sparkles },
-  { id: 'security', label: 'Security', icon: ShieldCheck },
-];
-
-const SECONDARY: Item[] = [
-  { id: 'settings', label: 'Settings', icon: Settings },
-];
+import { useWorkbench } from '../workbench/store';
+import { CORE_PANELS, SKILL_PANELS } from '../workbench/panels';
 
 export default function ActivityBar(): JSX.Element {
   const activeActivity = useWorkbench((s) => s.activeActivity);
   const sidebarVisible = useWorkbench((s) => s.sidebarVisible);
+  const rightPanel = useWorkbench((s) => s.rightPanel);
+  const rightSidebarVisible = useWorkbench((s) => s.rightSidebarVisible);
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
+  const openPage = useWorkbench((s) => s.openPage);
+  const editorTabs = useWorkbench((s) => s.editorTabs);
+  const activeTabId = useWorkbench((s) => s.activeTabId);
 
-  const renderItem = (item: Item) => {
-    const Icon = item.icon;
-    const isActive = activeActivity === item.id && sidebarVisible;
+  const activePageId =
+    editorTabs.find((t) => t.id === activeTabId)?.pageId ?? null;
+
+  const renderItem = (
+    panel: { id: typeof activeActivity; title: string; icon: typeof CORE_PANELS[number]['icon'] },
+    isSkill = false,
+  ) => {
+    const Icon = panel.icon;
+    let isActive: boolean;
+    let onClick: () => void;
+    if (isSkill) {
+      // Skills open as full-area workspace tabs, not in the side dock.
+      isActive = activePageId === panel.id;
+      onClick = () => openPage(panel.id);
+    } else {
+      const dockedRight = rightPanel === panel.id && rightSidebarVisible;
+      isActive = (activeActivity === panel.id && sidebarVisible) || dockedRight;
+      onClick = () => setActiveActivity(panel.id);
+    }
     return (
       <button
-        key={item.id}
+        key={panel.id}
         type="button"
         className={`rail__item ${isActive ? 'is-active' : ''}`}
-        onClick={() => setActiveActivity(item.id)}
-        aria-label={item.label}
+        onClick={onClick}
+        aria-label={panel.title}
       >
         <Icon size={17} strokeWidth={1.6} />
-        <span className="rail__tooltip">
-          {item.label}
-          {item.hint ? ` · ${item.hint}` : ''}
-        </span>
+        <span className="rail__tooltip">{panel.title}</span>
       </button>
     );
   };
 
+  const core = CORE_PANELS.filter((p) => p.id !== 'settings');
+  const settings = CORE_PANELS.find((p) => p.id === 'settings');
+
   return (
     <nav className="rail" aria-label="Activity">
-      {PRIMARY.map(renderItem)}
+      <div className="rail__logo" title="Forze IDE">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-accent)' }}>
+          <path d="M5 3h13a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H5m0-5v17m0-12h10" />
+        </svg>
+      </div>
+      <div className="rail__divider" style={{ marginTop: 2, marginBottom: 6 }} />
+      {core.map((p) => renderItem(p))}
+      <div className="rail__divider" />
+      {SKILL_PANELS.map((p) => renderItem(p, true))}
       <div className="rail__spacer" />
-      {SECONDARY.map(renderItem)}
+      {settings && renderItem(settings)}
     </nav>
   );
 }
