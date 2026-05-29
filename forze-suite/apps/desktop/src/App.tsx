@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { AnthropicProvider } from '@forze/agents';
 import ActivityBar from './shell/ActivityBar';
 import Sidebar from './shell/Sidebar';
 import EditorArea from './shell/EditorArea';
@@ -10,11 +9,15 @@ import TopBar from './shell/TopBar';
 import CommandBar from './shell/CommandBar';
 import CommandPalette from './shell/CommandPalette';
 import OnboardingWizard, { useOnboarding } from './shell/OnboardingWizard';
+import ErrorBoundary from './shell/ErrorBoundary';
+import { ToastHost } from './shell/toast';
 import type { EditorHandle } from './views/EditorCanvas';
 import { useApplyTheme } from './theme/themeStore';
 import { useAgents } from './workbench/agentStore';
 import { useWorkbench, type ActivityId } from './workbench/store';
+import { PANELS } from './workbench/panels';
 import { useProject } from './workbench/projectStore';
+import { anyProviderReady } from './workbench/aiConfig';
 import {
   closeWorkspace,
   openWorkspace,
@@ -32,9 +35,16 @@ import { parseStackTraceLine } from '@forze/shared/diagnostics';
 
 export default function App(): JSX.Element {
   const [logs, setLogs] = useState<string[]>([]);
+  const [dropOver, setDropOver] = useState(false);
   const activeEditorRef = useRef<EditorHandle | null>(null);
 
   const sidebarVisible = useWorkbench((s) => s.sidebarVisible);
+  const activeActivity = useWorkbench((s) => s.activeActivity);
+  const rightPanel = useWorkbench((s) => s.rightPanel);
+  const rightSidebarVisible = useWorkbench((s) => s.rightSidebarVisible);
+  const draggingPanel = useWorkbench((s) => s.draggingPanel);
+  const dockRight = useWorkbench((s) => s.dockRight);
+  const setDraggingPanel = useWorkbench((s) => s.setDraggingPanel);
   const bottomPanelVisible = useWorkbench((s) => s.bottomPanelVisible);
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
   const setBottomPanelTab = useWorkbench((s) => s.setBottomPanelTab);
@@ -51,9 +61,7 @@ export default function App(): JSX.Element {
   const pushDiagnostic = useDiagnostics((s) => s.push);
   const problemsCount = useDiagnostics((s) => s.entries.length);
   const scheduledPostsCount = useSocial((s) => s.posts.length);
-  const hasAgentKey = useAgents(
-    (s) => (s.apiKeys[AnthropicProvider.id] ?? '').length > 0,
-  );
+  const hasAgentKey = useAgents((s) => anyProviderReady(s.apiKeys));
   const resetOnboarding = useOnboarding((s) => s.reset);
 
   useApplyTheme();
@@ -80,13 +88,30 @@ export default function App(): JSX.Element {
   );
 
   useEffect(() => {
-    if (workspaceRoot) void openWorkspace(workspaceRoot);
+    try {
+      if (workspaceRoot) void openWorkspace(workspaceRoot).catch(() => undefined);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[forze] openWorkspace on boot failed', err);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    const stop = startSocialScheduler();
-    return () => stop();
+    let stop = () => undefined as void;
+    try {
+      stop = startSocialScheduler();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[forze] social scheduler failed to start', err);
+    }
+    return () => {
+      try {
+        stop();
+      } catch {
+        /* ignore */
+      }
+    };
   }, []);
 
   const onLog = useCallback(
@@ -102,9 +127,17 @@ export default function App(): JSX.Element {
   );
 
   useEffect(() => {
-    const unsubscribePromise = subscribeToDevServerLogs(onLog);
+    const unsubscribePromise = Promise.resolve(subscribeToDevServerLogs(onLog)).catch(
+      () => () => undefined,
+    );
     return () => {
-      void unsubscribePromise.then((unsubscribe) => unsubscribe());
+      void unsubscribePromise.then((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch {
+          /* ignore */
+        }
+      });
     };
   }, [onLog]);
 
@@ -311,28 +344,42 @@ export default function App(): JSX.Element {
     <>
       <div className="workbench">
         <div className="workbench__topbar">
-          <TopBar
-            onOpenSettings={() => setActiveActivity('settings')}
-            onToggleSidebar={toggleSidebar}
-          />
+          <ErrorBoundary scope="Top bar">
+            <TopBar
+              onOpenSettings={() => setActiveActivity('settings')}
+              onToggleSidebar={toggleSidebar}
+            />
+          </ErrorBoundary>
         </div>
 
         <div className="workbench__rail">
-          <ActivityBar />
+          <ErrorBoundary scope="Activity bar">
+            <ActivityBar />
+          </ErrorBoundary>
         </div>
 
-        <div className="workbench__main">
-          <PanelGroup direction="horizontal" autoSaveId="forze.workbench.horizontal">
+        <div className="workbench__main" style={{ position: 'relative' }}>
+          <PanelGroup
+            direction="horizontal"
+            autoSaveId="forze.workbench.horizontal"
+            style={{ flex: 1, minWidth: 0 }}
+          >
             {sidebarVisible && (
               <>
                 <Panel
-                  defaultSize={20}
+                  defaultSize={22}
                   minSize={12}
-                  maxSize={40}
+                  maxSize={45}
                   order={1}
                   id="sidebar"
                 >
-                  <Sidebar onInsertCode={insertSnippetIntoActiveEditor} />
+                  <ErrorBoundary scope="Sidebar">
+                    <Sidebar
+                      side="left"
+                      panelId={activeActivity}
+                      onInsertCode={insertSnippetIntoActiveEditor}
+                    />
+                  </ErrorBoundary>
                 </Panel>
                 <PanelResizeHandle className="resize-handle resize-handle--vertical" />
               </>
@@ -353,42 +400,81 @@ export default function App(): JSX.Element {
                       order={2}
                       id="bottom"
                     >
-                      <BottomPanel
-                        logs={logs}
-                        onClearLogs={() => setLogs([])}
-                      />
+                      <ErrorBoundary scope="Bottom panel">
+                        <BottomPanel logs={logs} onClearLogs={() => setLogs([])} />
+                      </ErrorBoundary>
                     </Panel>
                   </>
                 )}
               </PanelGroup>
             </Panel>
           </PanelGroup>
+
+          {/* Right sidebar lives outside the PanelGroup as a plain flex sibling
+              so toggling it can never invalidate the resizable layout. */}
+          {rightSidebarVisible && rightPanel && (
+            <aside className="rightdock">
+              <ErrorBoundary scope="Right sidebar">
+                <Sidebar
+                  side="right"
+                  panelId={rightPanel}
+                  onInsertCode={insertSnippetIntoActiveEditor}
+                />
+              </ErrorBoundary>
+            </aside>
+          )}
+
+          {draggingPanel && (
+            <div
+              className={`dropzone-right${dropOver ? ' is-over' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (!dropOver) setDropOver(true);
+              }}
+              onDragLeave={() => setDropOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData('text/forze-panel') as ActivityId;
+                if (id) dockRight(id);
+                setDropOver(false);
+                setDraggingPanel(null);
+              }}
+            >
+              Dock “{PANELS[draggingPanel].title}” to the right →
+            </div>
+          )}
         </div>
 
         <div className="workbench__commandbar">
-          <CommandBar />
+          <ErrorBoundary scope="Command bar">
+            <CommandBar />
+          </ErrorBoundary>
         </div>
 
         <div className="workbench__status">
-          <StatusBar
-            workspaceRoot={workspaceRoot}
-            branch={branch}
-            survivalScore={survival.score}
-            survivalBand={survival.band}
-            problemsCount={problemsCount}
-            scheduledPostsCount={scheduledPostsCount}
-            onOpenFolder={async () => {
-              const picked = await pickFolder();
-              if (picked) await openWorkspace(picked);
-            }}
-            onShowProblems={() => setBottomPanelTab('problems')}
-            onShowScore={() => void commands.run('workbench.action.boardroom.simulate')}
-            onShowSocial={() => setActiveActivity('social')}
-          />
+          <ErrorBoundary scope="Status bar">
+            <StatusBar
+              workspaceRoot={workspaceRoot}
+              branch={branch}
+              survivalScore={survival.score}
+              survivalBand={survival.band}
+              problemsCount={problemsCount}
+              scheduledPostsCount={scheduledPostsCount}
+              onOpenFolder={async () => {
+                const picked = await pickFolder();
+                if (picked) await openWorkspace(picked);
+              }}
+              onShowProblems={() => setBottomPanelTab('problems')}
+              onShowScore={() => void commands.run('workbench.action.boardroom.simulate')}
+              onShowSocial={() => setActiveActivity('social')}
+            />
+          </ErrorBoundary>
         </div>
       </div>
       <CommandPalette />
       <OnboardingWizard />
+      <ToastHost />
     </>
   );
 }
