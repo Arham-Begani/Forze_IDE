@@ -113,6 +113,77 @@ export async function* generate(
 
 export const provider: Provider = { id, label, models, generate };
 
+export interface VisionOptions {
+  apiKey: string;
+  /** Defaults to gemini-2.5-flash. */
+  model?: string;
+  /** Instruction describing what to produce from the image. */
+  prompt: string;
+  /** Base64-encoded image bytes (no `data:` prefix). */
+  imageBase64: string;
+  /** e.g. "image/png". */
+  mimeType: string;
+  signal?: AbortSignal;
+  maxTokens?: number;
+}
+
+/**
+ * One-shot multimodal generation: send an image + prompt, get text back.
+ * Non-streaming (`:generateContent`) because callers (e.g. Vibe Canvas) want
+ * the whole result before inserting it. Throws on a non-2xx response.
+ */
+export async function generateVision(options: VisionOptions): Promise<string> {
+  const model = options.model ?? 'gemini-2.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model,
+  )}:generateContent?key=${encodeURIComponent(options.apiKey)}`;
+
+  const body = {
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { text: options.prompt },
+          {
+            inline_data: {
+              mime_type: options.mimeType,
+              data: options.imageBase64,
+            },
+          },
+        ],
+      },
+    ],
+    generationConfig: { maxOutputTokens: options.maxTokens ?? 4096 },
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Gemini ${response.status}: ${text || response.statusText}`);
+  }
+
+  const json = (await response.json()) as GeminiGenerateResponse;
+  const parts = json.candidates?.[0]?.content?.parts ?? [];
+  const text = parts
+    .map((p) => p.text ?? '')
+    .join('')
+    .trim();
+  if (!text) throw new Error('Gemini returned no content for the image.');
+  return text;
+}
+
+interface GeminiGenerateResponse {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+}
+
 interface GeminiStreamEvent {
   candidates?: Array<{
     content?: { parts?: Array<{ text?: string }> };
