@@ -53,35 +53,58 @@ export async function closeWorkspace(): Promise<void> {
   useProject.getState().setWorkspace(null);
 }
 
-/** Open a file in a new editor tab. Idempotent — re-clicking activates it. */
-export async function openFile(filePath: string): Promise<void> {
-  const workbench = useWorkbench.getState();
+/** Paths whose contents are currently being read, to dedupe concurrent loads. */
+const inFlightReads = new Set<string>();
+
+/**
+ * Ensure a file's contents are in the buffer cache, reading from disk if not.
+ * Safe to call repeatedly: a no-op when the buffer is already present or a read
+ * is already in flight. This is what makes restored tabs (whose buffers are
+ * never persisted) show their content again after a reload.
+ */
+export async function ensureFileLoaded(filePath: string): Promise<void> {
   const project = useProject.getState();
-
-  // If the tab is already open, just activate it.
-  const existing = workbench.editorTabs.find((t) => t.filePath === filePath);
-  if (existing) {
-    workbench.setActiveTab(existing.id);
-    return;
-  }
-
-  let contents = '';
+  if (project.buffers.has(filePath)) return;
+  if (inFlightReads.has(filePath)) return;
+  inFlightReads.add(filePath);
   try {
-    contents = await readFile(filePath);
+    const contents = await readFile(filePath);
+    useProject.getState().setBuffer(filePath, contents);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[forze] read failed', filePath, err);
-    return;
+    useProject.getState().setBuffer(
+      filePath,
+      `// Forze could not read this file.\n// ${filePath}\n//\n// ${String(err)}`,
+    );
+  } finally {
+    inFlightReads.delete(filePath);
+  }
+}
+
+/** Open a file in an editor tab. Idempotent — re-clicking activates it. */
+export async function openFile(filePath: string): Promise<void> {
+  const workbench = useWorkbench.getState();
+
+  // Activate the existing tab, or open a new one immediately so the click
+  // always produces visible feedback.
+  const existing = workbench.editorTabs.find((t) => t.filePath === filePath);
+  if (existing) {
+    workbench.setActiveTab(existing.id);
+  } else {
+    workbench.openTab({
+      id: filePath,
+      title: basename(filePath),
+      filePath,
+      language: languageFromPath(filePath),
+      isDirty: false,
+    });
   }
 
-  project.setBuffer(filePath, contents);
-  workbench.openTab({
-    id: filePath,
-    title: basename(filePath),
-    filePath,
-    language: languageFromPath(filePath),
-    isDirty: false,
-  });
+  // Always make sure the contents are loaded. A tab can exist with an empty
+  // buffer after a reload (tabs persist; buffers don't), so we must read even
+  // when the tab was already open.
+  await ensureFileLoaded(filePath);
 }
 
 /** Save the active editor tab to disk. */
