@@ -1,12 +1,12 @@
-import { Editor, type OnMount } from '@monaco-editor/react';
 import {
   forwardRef,
-  useCallback,
+  useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
+  useState,
 } from 'react';
-import * as monaco from 'monaco-editor';
-import { attachDiagnosticsToEditor, clearDiagnostics } from '../lib/diagnostics';
+import { highlight } from '../lib/highlight';
 import type { StackTraceLine } from '@forze/shared/diagnostics';
 
 export interface EditorHandle {
@@ -22,125 +22,126 @@ interface EditorCanvasProps {
   onChange?: (value: string) => void;
 }
 
-// Custom Monaco theme: matches the Forze Noir palette so the editor blends
-// seamlessly with the rest of the IDE chrome.
-function defineForzeTheme(): void {
-  monaco.editor.defineTheme('forze-noir', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [
-      { token: '', foreground: 'ededf2', background: '0a0a0c' },
-      { token: 'comment', foreground: '5a5d68', fontStyle: 'italic' },
-      { token: 'keyword', foreground: 'd2a8ff' },
-      { token: 'keyword.control', foreground: 'ff7ab6' },
-      { token: 'string', foreground: '7ee787' },
-      { token: 'number', foreground: 'ff9090' },
-      { token: 'type', foreground: '79c0ff' },
-      { token: 'identifier', foreground: 'ededf2' },
-      { token: 'delimiter', foreground: 'b4b4c0' },
-      { token: 'tag', foreground: '79c0ff' },
-      { token: 'attribute.name', foreground: 'ffd866' },
-      { token: 'attribute.value', foreground: '7ee787' },
-      { token: 'variable', foreground: 'ededf2' },
-      { token: 'function', foreground: '9cdcfe' },
-    ],
-    colors: {
-      'editor.background': '#0a0a0c',
-      'editor.foreground': '#ededf2',
-      'editor.lineHighlightBackground': '#101013',
-      'editor.lineHighlightBorder': '#101013',
-      'editorLineNumber.foreground': '#3a3a45',
-      'editorLineNumber.activeForeground': '#8b7cff',
-      'editorCursor.foreground': '#a78bfa',
-      'editor.selectionBackground': '#3a2f6a',
-      'editor.selectionHighlightBackground': '#221b40',
-      'editorIndentGuide.background': '#1d1d24',
-      'editorIndentGuide.activeBackground': '#2a2a34',
-      'editorWhitespace.foreground': '#1d1d24',
-      'editorGutter.background': '#0a0a0c',
-      'editor.wordHighlightBackground': '#2a2a34',
-      'editorBracketMatch.background': '#3a2f6a',
-      'editorBracketMatch.border': '#8b7cff',
-      'scrollbarSlider.background': '#1d1d2480',
-      'scrollbarSlider.hoverBackground': '#2a2a34cc',
-      'scrollbarSlider.activeBackground': '#2a2a34',
-      'editorSuggestWidget.background': '#131318',
-      'editorSuggestWidget.border': '#1d1d24',
-      'editorSuggestWidget.selectedBackground': '#1a1a20',
-      'editorWidget.background': '#131318',
-      'editorWidget.border': '#1d1d24',
-    },
-  });
-}
-
-let themeDefined = false;
-
+/**
+ * Dependency-free code editor: a transparent <textarea> layered over a
+ * syntax-highlighted <pre>, with a synced line-number gutter. Chosen over
+ * Monaco because Monaco's CDN/worker loader and 4MB payload were unreliable
+ * inside the Tauri webview (blank editor + crashes). This always renders the
+ * file contents, works offline, and keeps the editor lightweight.
+ */
 const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
   function EditorCanvas({ initialValue = '', language = 'typescript', onChange }, ref) {
-    const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+    const [value, setValue] = useState(initialValue);
+    const [errorLines, setErrorLines] = useState<Set<number>>(() => new Set());
+    const taRef = useRef<HTMLTextAreaElement | null>(null);
+    const preRef = useRef<HTMLPreElement | null>(null);
+    const gutterRef = useRef<HTMLDivElement | null>(null);
 
-    const handleMount: OnMount = useCallback((editor, monacoInstance) => {
-      editorRef.current = editor;
-      if (!themeDefined) {
-        defineForzeTheme();
-        themeDefined = true;
+    // Re-seed when the file changes. EditorArea remounts via key={tabId}, but
+    // this keeps us correct if that ever changes.
+    useEffect(() => {
+      setValue(initialValue);
+      setErrorLines(new Set());
+    }, [initialValue]);
+
+    const lineCount = useMemo(() => value.split('\n').length, [value]);
+    const highlighted = useMemo(() => highlight(value, language), [value, language]);
+
+    const syncScroll = (): void => {
+      const ta = taRef.current;
+      if (!ta) return;
+      if (preRef.current) {
+        preRef.current.scrollTop = ta.scrollTop;
+        preRef.current.scrollLeft = ta.scrollLeft;
       }
-      monacoInstance.editor.setTheme('forze-noir');
-    }, []);
+      if (gutterRef.current) {
+        gutterRef.current.style.transform = `translateY(${-ta.scrollTop}px)`;
+      }
+    };
+
+    const update = (next: string): void => {
+      setValue(next);
+      onChange?.(next);
+    };
 
     useImperativeHandle(
       ref,
       () => ({
+        getValue: () => taRef.current?.value ?? value,
         insertAtCursor: (snippet: string) => {
-          const editor = editorRef.current;
-          if (!editor) return;
-          const range = editor.getSelection() ?? new monaco.Range(1, 1, 1, 1);
-          editor.executeEdits('forze-vibe-canvas', [
-            { range, text: snippet, forceMoveMarkers: true },
-          ]);
-          editor.focus();
+          const ta = taRef.current;
+          if (!ta) {
+            update(value + snippet);
+            return;
+          }
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          const next = value.slice(0, start) + snippet + value.slice(end);
+          update(next);
+          requestAnimationFrame(() => {
+            ta.focus();
+            const caret = start + snippet.length;
+            ta.setSelectionRange(caret, caret);
+          });
         },
-        markDiagnostic: (trace) => {
-          const editor = editorRef.current;
-          if (editor) attachDiagnosticsToEditor(editor, trace);
+        markDiagnostic: (trace: StackTraceLine) => {
+          setErrorLines((prev) => {
+            const next = new Set(prev);
+            next.add(trace.line);
+            return next;
+          });
         },
-        clearDiagnostics: () => {
-          const editor = editorRef.current;
-          if (editor) clearDiagnostics(editor);
-        },
-        getValue: () => editorRef.current?.getValue() ?? '',
+        clearDiagnostics: () => setErrorLines(new Set()),
       }),
-      [],
+      [value],
     );
 
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+      // Tab inserts two spaces instead of moving focus.
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const ta = e.currentTarget;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const next = value.slice(0, start) + '  ' + value.slice(end);
+        update(next);
+        requestAnimationFrame(() => {
+          ta.selectionStart = ta.selectionEnd = start + 2;
+        });
+      }
+    };
+
     return (
-      <div style={{ flex: 1, minHeight: 0, background: 'var(--color-editor-bg)' }}>
-        <Editor
-          height="100%"
-          defaultLanguage={language}
-          defaultValue={initialValue}
-          theme="forze-noir"
-          onMount={handleMount}
-          onChange={(value) => onChange?.(value ?? '')}
-          options={{
-            fontSize: 13,
-            fontFamily: "'JetBrains Mono', 'SF Mono', 'Fira Code', Consolas, monospace",
-            fontLigatures: true,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            tabSize: 2,
-            automaticLayout: true,
-            renderWhitespace: 'selection',
-            wordWrap: 'on',
-            padding: { top: 14, bottom: 14 },
-            smoothScrolling: true,
-            cursorBlinking: 'smooth',
-            cursorSmoothCaretAnimation: 'on',
-            renderLineHighlight: 'all',
-            lineNumbersMinChars: 3,
-            scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
-          }}
-        />
+      <div className="codeedit">
+        <div className="codeedit__gutter" aria-hidden>
+          <div className="codeedit__gutter-inner" ref={gutterRef}>
+            {Array.from({ length: lineCount }, (_, i) => (
+              <div
+                key={i}
+                className={`codeedit__num${errorLines.has(i + 1) ? ' is-error' : ''}`}
+              >
+                {i + 1}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="codeedit__main">
+          <pre className="codeedit__pre" ref={preRef} aria-hidden>
+            {highlighted}
+          </pre>
+          <textarea
+            ref={taRef}
+            className="codeedit__ta"
+            value={value}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            wrap="off"
+            onChange={(e) => update(e.target.value)}
+            onScroll={syncScroll}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
       </div>
     );
   },
