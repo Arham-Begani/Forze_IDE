@@ -163,8 +163,9 @@ export default function OnboardingWizard(): JSX.Element | null {
             <>
               <h2 className="wizard__title">Connect a model</h2>
               <p className="wizard__subtitle">
-                Add a key for Anthropic Claude, Google Gemini, or both. Keys are
-                stored locally on this device.
+                Forze comes with Gemini built in — you can skip this and start
+                chatting right away. Bring your own Gemini or Claude key any
+                time for higher limits or a different model.
               </p>
             </>
           )}
@@ -336,24 +337,25 @@ function AgentBody(): JSX.Element {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <KeyRow
+        provider={GeminiProvider.id}
+        label="Google Gemini — built in"
+        models="Gemini 2.5 Flash · Pro · Flash Lite"
+        link="https://aistudio.google.com/app/apikey"
+        value={geminiKey}
+        onChange={(v) => setApiKey(GeminiProvider.id, v)}
+      />
+      <KeyRow
         provider={AnthropicProvider.id}
-        label="Anthropic (Claude)"
+        label="Anthropic (Claude) — optional"
         models="Opus 4.7 · Sonnet 4.6 · Haiku 4.5"
         link="https://console.anthropic.com/settings/keys"
         value={anthropicKey}
         onChange={(v) => setApiKey(AnthropicProvider.id, v)}
       />
-      <KeyRow
-        provider={GeminiProvider.id}
-        label="Google Gemini"
-        models="Gemini 2.5 Pro · Flash · Flash Lite"
-        link="https://aistudio.google.com/app/apikey"
-        value={geminiKey}
-        onChange={(v) => setApiKey(GeminiProvider.id, v)}
-      />
       <p className="dim" style={{ lineHeight: 1.6 }}>
-        Either is fine to start. Keys are stored locally and only sent to the
-        provider you choose. You can skip this and add keys later from Settings.
+        You can skip this entirely — Gemini works out of the box. Add a key only
+        for higher limits or to use Claude. Keys are stored locally and only
+        sent to the provider you choose.
       </p>
     </div>
   );
@@ -437,7 +439,7 @@ function DoneBody(): JSX.Element {
           open a terminal
         </li>
         <li>Type into the bar at the bottom to chat with the active agent</li>
-        <li>Click the model pill to switch providers (Claude ↔ Gemini)</li>
+        <li>Click the model pill to switch providers (Gemini ↔ Claude)</li>
         <li>Click Social in the rail to schedule a post</li>
       </ul>
       <div className="dim">
