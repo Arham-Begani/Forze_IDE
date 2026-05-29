@@ -208,8 +208,25 @@ function TreeRow({ node, depth, onToggle, onOpenFile }: TreeRowProps): JSX.Eleme
         ) : (
           <span style={{ width: 12 }} />
         )}
-        {entry.is_dir ? <Folder size={14} strokeWidth={1.6} /> : <FileIcon size={14} strokeWidth={1.6} />}
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {(() => {
+          const getIconClass = () => {
+            if (entry.is_dir) return 'icon-folder';
+            const parts = entry.name.split('.');
+            const ext = parts.length > 1 ? parts.pop()?.toLowerCase() : '';
+            if (['ts', 'tsx', 'js', 'jsx'].includes(ext || '')) return 'icon-code';
+            if (['json', 'yaml', 'yml', 'lock', 'toml'].includes(ext || '')) return 'icon-config';
+            if (entry.name.includes('.env')) return 'icon-env';
+            if (['md', 'txt', 'pdf'].includes(ext || '')) return 'icon-doc';
+            return 'icon-file';
+          };
+          const cls = getIconClass();
+          return entry.is_dir ? (
+            <Folder size={14} strokeWidth={1.6} className={cls} />
+          ) : (
+            <FileIcon size={14} strokeWidth={1.6} className={cls} />
+          );
+        })()}
+        <span className={`tree-name ${entry.is_dir ? 'is-directory' : 'is-file'}`}>
           {entry.name}
         </span>
       </div>
