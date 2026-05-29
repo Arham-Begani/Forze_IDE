@@ -10,6 +10,7 @@ import { AnthropicProvider, GeminiProvider } from '@forze/agents';
 import { pickFolder } from '../lib/dialog';
 import { THEMES, useTheme, type ThemeId } from '../theme/themeStore';
 import { useAgents } from '../workbench/agentStore';
+import { usesBuiltInKey } from '../workbench/aiConfig';
 import { openWorkspace } from '../workbench/actions';
 import { useProject } from '../workbench/projectStore';
 import { useSocial } from '../workbench/socialStore';
@@ -19,6 +20,7 @@ export default function SettingsView(): JSX.Element {
   const setTheme = useTheme((s) => s.setTheme);
   const apiKeys = useAgents((s) => s.apiKeys);
   const setApiKey = useAgents((s) => s.setApiKey);
+  const geminiBuiltIn = usesBuiltInKey(GeminiProvider.id, apiKeys);
   const workspaceRoot = useProject((s) => s.workspaceRoot);
   const sessionToken = useSocial((s) => s.sessionToken);
   const setSessionToken = useSocial((s) => s.setSessionToken);
@@ -83,22 +85,26 @@ export default function SettingsView(): JSX.Element {
           <strong style={{ fontSize: 13 }}>Agent providers</strong>
         </div>
         <p className="dim">
-          Keys are stored locally on this device. Both providers can be active
-          simultaneously — switch per thread in the Agents panel.
+          Gemini is the built-in general model — it works with no setup. Add
+          your own key for higher limits, or a Claude key to use Anthropic.
+          Keys are stored locally and you can switch per thread in the Agents
+          panel.
         </p>
+        <KeyField
+          label="Google Gemini"
+          link="https://aistudio.google.com/app/apikey"
+          placeholder={geminiBuiltIn ? 'using built-in key — paste to override' : 'AIza…'}
+          note={geminiBuiltIn ? 'Built-in · active' : undefined}
+          value={apiKeys[GeminiProvider.id] ?? ''}
+          onChange={(v) => setApiKey(GeminiProvider.id, v)}
+        />
         <KeyField
           label="Anthropic (Claude)"
           link="https://console.anthropic.com/settings/keys"
           placeholder="sk-ant-…"
+          note="Optional · bring your own key"
           value={apiKeys[AnthropicProvider.id] ?? ''}
           onChange={(v) => setApiKey(AnthropicProvider.id, v)}
-        />
-        <KeyField
-          label="Google Gemini"
-          link="https://aistudio.google.com/app/apikey"
-          placeholder="AIza…"
-          value={apiKeys[GeminiProvider.id] ?? ''}
-          onChange={(v) => setApiKey(GeminiProvider.id, v)}
         />
       </div>
 
@@ -126,12 +132,14 @@ function KeyField({
   label,
   link,
   placeholder,
+  note,
   value,
   onChange,
 }: {
   label: string;
   link: string;
   placeholder: string;
+  note?: string;
   value: string;
   onChange: (v: string) => void;
 }): JSX.Element {
@@ -147,8 +155,13 @@ function KeyField({
         }}
       >
         <span>{label}</span>
-        {value && (
+        {(value || note) && (
           <CheckCircle2 size={12} style={{ color: 'var(--color-ok)' }} />
+        )}
+        {note && !value && (
+          <span style={{ fontSize: 11, color: 'var(--color-text-dim)' }}>
+            {note}
+          </span>
         )}
         <a
           href={link}
@@ -241,22 +254,22 @@ const SAMPLE_PALETTES: Record<ThemeId, {
   rail: string;
 }> = {
   'forze-noir': {
-    bg: '#131318',
-    fg: '#ededf2',
-    editor: '#0a0a0c',
-    sidebar: '#0c0c10',
-    rail: '#0a0a0c',
+    bg: '#111111',
+    fg: '#ffffff',
+    editor: '#050505',
+    sidebar: '#090909',
+    rail: '#050505',
   },
   'forze-midnight': {
-    bg: '#0f131e',
-    fg: '#ededf2',
-    editor: '#07090f',
-    sidebar: '#090c14',
-    rail: '#07090f',
+    bg: '#12141a',
+    fg: '#ffffff',
+    editor: '#060709',
+    sidebar: '#0a0c10',
+    rail: '#060709',
   },
   'forze-graphite': {
-    bg: '#18181a',
-    fg: '#ededf2',
+    bg: '#1c1c1f',
+    fg: '#ffffff',
     editor: '#0d0d0e',
     sidebar: '#101012',
     rail: '#0d0d0e',
