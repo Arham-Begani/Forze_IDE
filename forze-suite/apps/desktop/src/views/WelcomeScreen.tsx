@@ -1,96 +1,154 @@
+import { useState } from 'react';
 import {
-  Files,
-  GitBranch,
+  ArrowUp,
   Bot,
-  Megaphone,
-  Sparkles,
-  ShieldCheck,
-  TerminalSquare,
   FolderOpen,
+  GitBranch,
   KeyRound,
+  Rocket,
+  ShieldCheck,
+  Sparkles,
+  TerminalSquare,
   type LucideIcon,
 } from 'lucide-react';
 import { pickFolder } from '../lib/dialog';
 import { openWorkspace } from '../workbench/actions';
+import { askForze } from '../workbench/ask';
+import { useAgents } from '../workbench/agentStore';
 import { useProject } from '../workbench/projectStore';
-import { useWorkbench, type ActivityId } from '../workbench/store';
+import { isDockable, useWorkbench, type ActivityId } from '../workbench/store';
+
+const STARTERS = [
+  'A SaaS landing page with a waitlist and Stripe checkout',
+  'A Next.js + Postgres app with auth and a dashboard',
+  'Add Stripe subscriptions to my existing app',
+  'Explain this codebase and suggest the first three improvements',
+];
 
 interface FeatureCard {
   title: string;
   desc: string;
-  shortcut?: string;
   icon: LucideIcon;
   action: { kind: 'activity'; id: ActivityId } | { kind: 'panel'; id: 'terminal' };
 }
 
 const FEATURES: FeatureCard[] = [
   {
-    title: 'Explorer',
-    desc: 'Browse and edit your workspace. Drag, rename, search files.',
-    shortcut: 'Ctrl+Shift+E',
-    icon: Files,
-    action: { kind: 'activity', id: 'explorer' },
-  },
-  {
-    title: 'Terminal',
-    desc: 'A real PTY shell inside the IDE. Run dev servers, scripts, anything.',
-    shortcut: 'Ctrl+`',
-    icon: TerminalSquare,
-    action: { kind: 'panel', id: 'terminal' },
-  },
-  {
-    title: 'Source Control',
-    desc: 'Live git status, stage hunks, commit with one keystroke.',
-    shortcut: 'Ctrl+Shift+G',
-    icon: GitBranch,
-    action: { kind: 'activity', id: 'source-control' },
-  },
-  {
-    title: 'Agents',
-    desc: 'Chat with @build, @security, @marketing on Claude or Gemini — they read your workspace via MCP.',
-    shortcut: 'Ctrl+Shift+A',
+    title: 'Chat to build',
+    desc: 'Describe a feature in plain English — Forze writes and edits the files for you, in context.',
     icon: Bot,
     action: { kind: 'activity', id: 'agents' },
   },
   {
-    title: 'Social',
-    desc: 'Schedule LinkedIn / X / Threads / TikTok posts. Calendar + queue.',
-    icon: Megaphone,
-    action: { kind: 'activity', id: 'social' },
-  },
-  {
     title: 'Vibe Canvas',
-    desc: 'Drop a mockup PNG. Gemini returns Tailwind JSX into the cursor.',
+    desc: 'Drop a screenshot or mockup. Get clean, production Tailwind JSX back in your editor.',
     icon: Sparkles,
     action: { kind: 'activity', id: 'vibe' },
   },
   {
-    title: 'Security',
-    desc: 'Catch leaked API keys and missing Supabase RLS before commit.',
+    title: 'Integrated terminal',
+    desc: 'A real PTY shell inside the workspace. Run dev servers, migrations, anything.',
+    icon: TerminalSquare,
+    action: { kind: 'panel', id: 'terminal' },
+  },
+  {
+    title: 'Source control',
+    desc: 'Live git status, stage hunks, and commit — without leaving the flow.',
+    icon: GitBranch,
+    action: { kind: 'activity', id: 'source-control' },
+  },
+  {
+    title: 'Ship it',
+    desc: 'Push previews and production deploys, manage env vars, watch builds land.',
+    icon: Rocket,
+    action: { kind: 'activity', id: 'deployments' },
+  },
+  {
+    title: 'Security rails',
+    desc: 'Catch leaked API keys and missing Supabase RLS before they reach production.',
     icon: ShieldCheck,
     action: { kind: 'activity', id: 'security' },
   },
 ];
 
 export default function WelcomeScreen(): JSX.Element {
+  const [prompt, setPrompt] = useState('');
   const workspaceRoot = useProject((s) => s.workspaceRoot);
+  const hasKey = useAgents((s) =>
+    Object.values(s.apiKeys).some((k) => (k ?? '').length > 0),
+  );
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
   const setBottomPanelTab = useWorkbench((s) => s.setBottomPanelTab);
+  const openPage = useWorkbench((s) => s.openPage);
+
+  const submit = (): void => {
+    const text = prompt.trim();
+    if (!text) return;
+    void askForze(text);
+    setPrompt('');
+  };
 
   return (
-    <div className="welcome">
-      <div className="welcome__hero">
-        <span className="welcome__brand">
-          <span className="welcome__brand-dot" />
-          Forze IDE · v0.3
+    <div className="launch">
+      <header className="launch__hero">
+        <span className="launch__brand">
+          <span className="launch__brand-dot" />
+          FORZE · BUILDER OS
         </span>
-        <h1 className="welcome__title">The sovereign OS for founders.</h1>
-        <p className="welcome__subtitle">
-          Code, ship, and market from one window. Shared MCP context across every
-          coding agent you use, a real PTY terminal, in-app social scheduling,
-          and security rails that keep AI-introduced bugs out of production.
+        <h1 className="launch__title">What are we building today?</h1>
+        <p className="launch__subtitle">
+          Describe it in a sentence. Forze scaffolds the code, wires the backend,
+          and ships it — you stay in the vibe.
         </p>
-        <div className="welcome__cta">
+      </header>
+
+      <div className="launch__composer">
+        <div className="launch__prompt">
+          <Sparkles
+            size={17}
+            strokeWidth={1.7}
+            className="launch__prompt-icon"
+          />
+          <textarea
+            className="launch__prompt-input"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Build a SaaS landing page with a waitlist and Stripe checkout…"
+            rows={2}
+            aria-label="Describe what you want to build"
+          />
+          <button
+            type="button"
+            className="launch__send"
+            onClick={submit}
+            disabled={!prompt.trim()}
+            aria-label="Start building"
+            title="Start building (Enter)"
+          >
+            <ArrowUp size={16} strokeWidth={2.2} />
+          </button>
+        </div>
+
+        <div className="launch__chips">
+          {STARTERS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className="launch__chip"
+              onClick={() => setPrompt(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        <div className="launch__actions">
           <button
             type="button"
             className="btn-primary"
@@ -99,29 +157,21 @@ export default function WelcomeScreen(): JSX.Element {
               if (picked) await openWorkspace(picked);
             }}
           >
-            <FolderOpen
-              size={13}
-              strokeWidth={1.8}
-              style={{ verticalAlign: 'text-bottom', marginRight: 6 }}
-            />
-            {workspaceRoot ? 'Open another folder' : 'Open folder'}
+            <FolderOpen size={14} strokeWidth={1.8} />
+            {workspaceRoot ? 'Open another folder' : 'Open a folder'}
           </button>
           <button
             type="button"
             className="btn-ghost"
             onClick={() => setActiveActivity('settings')}
           >
-            <KeyRound
-              size={13}
-              strokeWidth={1.8}
-              style={{ verticalAlign: 'text-bottom', marginRight: 6 }}
-            />
-            Connect API keys
+            <KeyRound size={14} strokeWidth={1.8} />
+            {hasKey ? 'Manage API keys' : 'Connect an API key'}
           </button>
         </div>
       </div>
 
-      <div className="welcome__features">
+      <div className="launch__features">
         {FEATURES.map((feature) => {
           const Icon = feature.icon;
           return (
@@ -130,21 +180,21 @@ export default function WelcomeScreen(): JSX.Element {
               type="button"
               className="feature-card"
               onClick={() => {
-                if (feature.action.kind === 'activity') {
-                  setActiveActivity(feature.action.id);
-                } else {
+                if (feature.action.kind === 'panel') {
                   setBottomPanelTab(feature.action.id);
+                } else if (isDockable(feature.action.id)) {
+                  // Skills open as full-area workspace tabs.
+                  openPage(feature.action.id);
+                } else {
+                  setActiveActivity(feature.action.id);
                 }
               }}
             >
               <span className="feature-card__icon">
-                <Icon size={14} strokeWidth={1.7} />
+                <Icon size={17} strokeWidth={1.7} />
               </span>
               <span className="feature-card__title">{feature.title}</span>
               <span className="feature-card__desc">{feature.desc}</span>
-              {feature.shortcut && (
-                <span className="feature-card__shortcut">{feature.shortcut}</span>
-              )}
             </button>
           );
         })}
