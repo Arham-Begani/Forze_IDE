@@ -1,171 +1,205 @@
-/* Forze IDE — design tokens (v2, sleek dark)
-   Defaults to Forze Noir. Other themes override individual properties via
-   `:root[data-theme="..."]` selectors below.
+/* Forze — design tokens (v4, premium matte black)
+   Forze Noir is the brand default: a matte-black, platinum-silver aesthetic for
+   an elite builder OS. Black + white + silver only — no chroma in the chrome.
+   Hierarchy is built from brightness and whitespace, not colour or borders.
+   The single permitted chroma is a restrained red reserved strictly for true
+   error / destructive state (and code syntax in the editor). Other themes
+   override below.
 */
 
 :root,
 :root[data-theme='forze-noir'] {
-  /* === Core surfaces (very dark, monochrome) === */
-  --color-bg: #0a0a0c;
-  --color-bg-elevated: #101013;
-  --color-surface: #131318;
-  --color-surface-hover: #1a1a20;
-  --color-surface-active: #20202a;
-  --color-surface-glow: #1c1c26;
+  /* === Core surfaces (matte black / deep charcoal) === */
+  --color-bg: #050508;
+  --color-bg-elevated: #09090d;
+  --color-surface: #0e0e14;
+  --color-card: #0b0b10;
+  --color-surface-hover: rgba(99, 102, 241, 0.05);
+  --color-surface-active: rgba(99, 102, 241, 0.09);
+  --color-surface-glow: rgba(99, 102, 241, 0.04);
 
-  /* === Borders (almost invisible, just enough to separate) === */
-  --color-border: #1d1d24;
-  --color-border-strong: #2a2a34;
-  --color-border-subtle: #15151b;
-  --color-focus-ring: #8b7cff;
+  /* === Borders (translucent hairlines — separation without weight) === */
+  --color-border: rgba(255, 255, 255, 0.045);
+  --color-border-strong: rgba(255, 255, 255, 0.09);
+  --color-border-subtle: rgba(255, 255, 255, 0.02);
+  --color-focus-ring: rgba(99, 102, 241, 0.5);
 
-  /* === Text === */
-  --color-text: #ededf2;
-  --color-text-muted: #b4b4c0;
-  --color-text-dim: #6a6a78;
-  --color-text-disabled: #45454f;
-  --color-text-inverted: #0a0a0c;
+  /* === Text (elegant slate scale) === */
+  --color-text: #f8fafc;
+  --color-text-muted: #cbd5e1;
+  --color-text-dim: #94a3b8;
+  --color-text-disabled: #475569;
+  --color-text-inverted: #050508;
 
-  /* === Accent (single saturated hue) === */
-  --color-accent: #8b7cff;
-  --color-accent-bright: #a499ff;
-  --color-accent-soft: rgba(139, 124, 255, 0.12);
-  --color-accent-border: rgba(139, 124, 255, 0.38);
-  --color-accent-glow: rgba(139, 124, 255, 0.25);
+  /* === Accent (vibrant premium Indigo) === */
+  --color-accent: #6366f1;
+  --color-accent-bright: #818cf8;
+  --color-accent-soft: rgba(99, 102, 241, 0.08);
+  --color-accent-border: rgba(99, 102, 241, 0.24);
+  --color-accent-glow: rgba(99, 102, 241, 0.15);
 
-  /* === Semantic === */
-  --color-danger: #ff7170;
-  --color-danger-soft: rgba(255, 113, 112, 0.12);
-  --color-warn: #ffd866;
-  --color-warn-soft: rgba(255, 216, 102, 0.12);
-  --color-ok: #7ee787;
-  --color-ok-soft: rgba(126, 231, 135, 0.12);
-  --color-info: #79c0ff;
-  --color-info-soft: rgba(121, 192, 255, 0.12);
+  /* === Semantic (near-monochrome) ===
+     Success reads as bright white. Info is slate. Warn is a barely-there muted
+     gold used only for genuine warnings. Danger is the one restrained chroma —
+     reserved for true error / destructive actions. No green / cyan / amber. */
+  --color-ok: #ffffff;
+  --color-ok-soft: rgba(255, 255, 255, 0.08);
+  --color-info: #94a3b8;
+  --color-info-soft: rgba(148, 163, 184, 0.1);
+  --color-warn: #c9a86a;
+  --color-warn-soft: rgba(201, 168, 106, 0.1);
+  --color-danger: #e5645f;
+  --color-danger-soft: rgba(229, 100, 95, 0.12);
 
-  /* === Activity rail (slim, dark) === */
-  --color-rail-bg: #0a0a0c;
-  --color-rail-fg: #5a5d68;
-  --color-rail-fg-hover: #b4b4c0;
-  --color-rail-fg-active: #ededf2;
-  --color-rail-indicator: #8b7cff;
+  /* === Glass (floating panels / palette / overlays) === */
+  --glass-bg: rgba(9, 9, 13, 0.72);
+  --glass-bg-strong: rgba(11, 11, 16, 0.88);
+  --glass-border: rgba(99, 102, 241, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.04);
+  --glass-blur: 24px;
+
+  /* === Ambient backdrop (whisper of depth behind the shell) === */
+  --backdrop-gradient:
+    radial-gradient(1200px 700px at 80% -10%, rgba(99, 102, 241, 0.06), transparent 60%),
+    radial-gradient(900px 620px at 6% 110%, rgba(255, 255, 255, 0.02), transparent 62%);
+
+  /* === Activity rail (slim, matte) === */
+  --color-rail-bg: #050508;
+  --color-rail-fg: #64748b;
+  --color-rail-fg-hover: #94a3b8;
+  --color-rail-fg-active: #6366f1;
+  --color-rail-indicator: #6366f1;
 
   /* === Sidebar === */
-  --color-sidebar-bg: #0c0c10;
-  --color-sidebar-section-fg: #6a6a78;
+  --color-sidebar-bg: #08080c;
+  --color-sidebar-section-fg: #64748b;
 
-  /* === Status bar (subtle, not bright) === */
-  --color-status-bg: #0a0a0c;
-  --color-status-fg: #b4b4c0;
-  --color-status-border: #1d1d24;
-  --color-status-accent-fg: #ededf2;
+  /* === Status bar === */
+  --color-status-bg: #050508;
+  --color-status-fg: #94a3b8;
+  --color-status-border: rgba(255, 255, 255, 0.04);
+  --color-status-accent-fg: #6366f1;
 
   /* === Editor / terminal === */
-  --color-editor-bg: #0a0a0c;
-  --color-editor-gutter: #0a0a0c;
-  --color-editor-line: rgba(255, 255, 255, 0.018);
-  --color-terminal-bg: #0a0a0c;
+  --color-editor-bg: #050508;
+  --color-editor-gutter: #050508;
+  --color-editor-line: rgba(99, 102, 241, 0.02);
+  --color-terminal-bg: #050508;
 
   /* === Top tab pill === */
   --color-tab-bg: transparent;
-  --color-tab-fg: #6a6a78;
-  --color-tab-bg-active: #1a1a20;
-  --color-tab-fg-active: #ededf2;
-  --color-tab-border-active: #2a2a34;
-  --color-tab-modified: #ffd866;
+  --color-tab-fg: #94a3b8;
+  --color-tab-bg-active: rgba(99, 102, 241, 0.08);
+  --color-tab-fg-active: #ffffff;
+  --color-tab-border-active: rgba(99, 102, 241, 0.2);
+  --color-tab-modified: #818cf8;
 
   /* === Command bar === */
-  --color-command-bg: #0e0e12;
-  --color-command-fg: #ededf2;
-  --color-command-placeholder: #5a5d68;
-  --color-command-border: #1d1d24;
+  --color-command-bg: #08080c;
+  --color-command-fg: #ffffff;
+  --color-command-placeholder: #64748b;
+  --color-command-border: rgba(99, 102, 241, 0.08);
 
   /* === Sizing === */
-  --size-titlebar: 38px;
-  --size-rail: 44px;
+  --size-titlebar: 40px;
+  --size-rail: 52px;
   --size-status-bar: 28px;
-  --size-command-bar: 56px;
-  --size-bottom-panel-default: 240px;
-  --size-sidebar-min: 200px;
-  --size-sidebar-default: 260px;
-  --size-tab-bar: 38px;
+  --size-command-bar: 64px;
+  --size-bottom-panel-default: 260px;
+  --size-sidebar-min: 220px;
+  --size-sidebar-default: 280px;
+  --size-tab-bar: 40px;
 
-  /* === Typography === */
-  --font-sans: 'Inter', 'SF Pro Text', system-ui, -apple-system, 'Segoe UI Variable', 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  /* === Typography (Plus Jakarta Sans + Inter — clean and premium) === */
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
   --font-size-xs: 11px;
   --font-size-sm: 12px;
   --font-size-md: 13px;
   --font-size-lg: 14px;
   --font-size-xl: 18px;
+  --font-size-2xl: 22px;
+  --font-size-3xl: 26px;
+  --font-size-display: 38px;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
-  /* === Motion === */
-  --motion-fast: 0.12s cubic-bezier(0.2, 0, 0, 1);
-  --motion-medium: 0.2s cubic-bezier(0.2, 0, 0, 1);
-  --motion-slow: 0.32s cubic-bezier(0.2, 0, 0, 1);
+  /* === Motion (smooth + premium, 200–300ms) === */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-fast: 0.18s var(--ease-out);
+  --motion-medium: 0.28s var(--ease-out);
+  --motion-slow: 0.38s var(--ease-out);
 
-  /* === Elevation === */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.52);
-  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.66);
-  --glow-accent: 0 0 28px rgba(139, 124, 255, 0.18);
+  /* === Elevation (soft, ambient — depth without harshness) === */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 12px 30px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.015);
+  --glow-accent: 0 0 0 1px rgba(99, 102, 241, 0.08), 0 14px 40px rgba(0, 0, 0, 0.45);
+  --hairline-top: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 
   /* === Radii === */
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 8px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 9px;
   --radius-lg: 12px;
-  --radius-xl: 18px;
+  --radius-xl: 16px;
+  --radius-card: 16px;
   --radius-pill: 999px;
 
   color-scheme: dark;
 }
 
-/* === Midnight (deep blue) ================================================ */
+/* === Midnight (deep cool blue-navy — cold indigo accents) =============== */
 :root[data-theme='forze-midnight'] {
-  --color-bg: #07090f;
-  --color-bg-elevated: #0c0f17;
-  --color-surface: #0f131e;
-  --color-surface-hover: #161b29;
-  --color-surface-active: #1c2236;
-  --color-border: #182032;
-  --color-border-strong: #243152;
-  --color-accent: #5e8dff;
-  --color-accent-bright: #82a8ff;
-  --color-accent-soft: rgba(94, 141, 255, 0.14);
-  --color-accent-border: rgba(94, 141, 255, 0.42);
-  --color-rail-bg: #07090f;
-  --color-sidebar-bg: #090c14;
-  --color-editor-bg: #07090f;
-  --color-terminal-bg: #07090f;
-  --color-tab-bg-active: #161b29;
-  --color-command-bg: #0c0f17;
-  --color-status-bg: #07090f;
+  --color-bg: #070913;
+  --color-bg-elevated: #0a0d1e;
+  --color-surface: #0e122a;
+  --color-card: #0b0f22;
+  --color-surface-hover: rgba(99, 102, 241, 0.07);
+  --color-surface-active: rgba(99, 102, 241, 0.12);
+  --color-border: rgba(99, 102, 241, 0.08);
+  --color-border-strong: rgba(99, 102, 241, 0.15);
+  --color-accent: #6366f1;
+  --color-accent-bright: #818cf8;
+  --color-accent-soft: rgba(99, 102, 241, 0.1);
+  --color-accent-border: rgba(99, 102, 241, 0.28);
+  --color-rail-bg: #070913;
+  --color-sidebar-bg: #0a0d1e;
+  --color-editor-bg: #070913;
+  --color-terminal-bg: #070913;
+  --color-tab-bg-active: rgba(99, 102, 241, 0.1);
+  --color-command-bg: #0a0d1e;
+  --color-status-bg: #070913;
+  --backdrop-gradient:
+    radial-gradient(1200px 700px at 80% -10%, rgba(99, 102, 241, 0.08), transparent 60%),
+    radial-gradient(900px 620px at 6% 110%, rgba(255, 255, 255, 0.02), transparent 62%);
   color-scheme: dark;
 }
 
-/* === Graphite (true neutral) ============================================= */
+/* === Graphite (matte slate-gray) ========================================= */
 :root[data-theme='forze-graphite'] {
-  --color-bg: #0d0d0e;
-  --color-bg-elevated: #131315;
-  --color-surface: #18181a;
-  --color-surface-hover: #1f1f22;
-  --color-surface-active: #26262a;
-  --color-border: #232326;
-  --color-border-strong: #303035;
-  --color-accent: #d4d4d8;
-  --color-accent-bright: #f4f4f5;
-  --color-accent-soft: rgba(212, 212, 216, 0.10);
-  --color-accent-border: rgba(212, 212, 216, 0.32);
-  --color-rail-bg: #0d0d0e;
-  --color-sidebar-bg: #101012;
-  --color-editor-bg: #0d0d0e;
-  --color-terminal-bg: #0d0d0e;
-  --color-tab-bg-active: #1f1f22;
-  --color-command-bg: #131315;
-  --color-status-bg: #0d0d0e;
+  --color-bg: #0f1115;
+  --color-bg-elevated: #15181f;
+  --color-surface: #1a1e27;
+  --color-card: #12151c;
+  --color-surface-hover: rgba(99, 102, 241, 0.06);
+  --color-surface-active: rgba(99, 102, 241, 0.1);
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+  --color-accent: #818cf8;
+  --color-accent-bright: #a5b4fc;
+  --color-accent-soft: rgba(129, 140, 248, 0.08);
+  --color-accent-border: rgba(129, 140, 248, 0.22);
+  --color-rail-bg: #0f1115;
+  --color-sidebar-bg: #14171e;
+  --color-editor-bg: #0f1115;
+  --color-terminal-bg: #0f1115;
+  --color-tab-bg-active: rgba(129, 140, 248, 0.08);
+  --color-command-bg: #15181f;
+  --color-status-bg: #0f1115;
+  --backdrop-gradient:
+    radial-gradient(1200px 700px at 80% -10%, rgba(129, 140, 248, 0.06), transparent 60%);
   color-scheme: dark;
 }

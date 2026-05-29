@@ -13,7 +13,7 @@ export const THEMES: { id: ThemeId; label: string; description: string }[] = [
   {
     id: 'forze-noir',
     label: 'Noir',
-    description: 'Default. Near-black with violet accent.',
+    description: 'Default. Near-black with platinum-silver accents.',
   },
   {
     id: 'forze-midnight',
