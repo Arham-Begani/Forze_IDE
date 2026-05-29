@@ -2,6 +2,7 @@ import { Search, Settings, SquareSplitHorizontal, X, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useWorkbench } from '../workbench/store';
 import { commands } from '../workbench/commands';
+import { PANELS } from '../workbench/panels';
 import { iconForLanguage } from '../lib/fileIcons';
 
 interface TopBarProps {
@@ -31,7 +32,7 @@ export default function TopBar({ onOpenSettings, onToggleSidebar }: TopBarProps)
     <div className="topbar">
       <div className="topbar__tabs" role="tablist">
         {editorTabs.map((tab) => {
-          const Icon = iconForLanguage(tab.language);
+          const Icon = tab.pageId ? PANELS[tab.pageId].icon : iconForLanguage(tab.language);
           const isActive = tab.id === activeTabId;
           return (
             <button
