@@ -8,25 +8,17 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AnthropicProvider,
-  GeminiProvider,
-  PRESETS,
-  findPreset,
-  type Message,
-  type Provider,
-} from '@forze/agents';
+import { PRESETS, findPreset, type Message } from '@forze/agents';
 import { useAgents, type AgentThread } from '../workbench/agentStore';
 import { useWorkbench } from '../workbench/store';
-
-const PROVIDERS: Provider[] = [
-  AnthropicProvider.provider,
-  GeminiProvider.provider,
-];
-
-function providerForId(id: string): Provider {
-  return PROVIDERS.find((p) => p.id === id) ?? PROVIDERS[0]!;
-}
+import {
+  DEFAULT_PROVIDER_ID,
+  PROVIDERS,
+  defaultModelFor,
+  isProviderReady,
+  providerForId,
+  resolveApiKey,
+} from '../workbench/aiConfig';
 
 export default function AgentView(): JSX.Element {
   const threads = useAgents((s) => s.threads);
@@ -52,10 +44,9 @@ export default function AgentView(): JSX.Element {
 
   const newThread = useCallback(
     (providerId: string) => {
-      const provider = providerForId(providerId);
       createThread({
         providerId,
-        model: provider.models[0]!.id,
+        model: defaultModelFor(providerId),
         presetId: 'build',
       });
     },
@@ -63,7 +54,7 @@ export default function AgentView(): JSX.Element {
   );
 
   useEffect(() => {
-    if (threads.length === 0) newThread(AnthropicProvider.id);
+    if (threads.length === 0) newThread(DEFAULT_PROVIDER_ID);
   }, [threads.length, newThread]);
 
   const send = useCallback(async () => {
@@ -72,7 +63,7 @@ export default function AgentView(): JSX.Element {
     if (!trimmed) return;
 
     const provider = providerForId(activeThread.providerId);
-    const key = apiKeys[provider.id] ?? '';
+    const key = resolveApiKey(provider.id, apiKeys);
     if (!key) {
       setError(`Add a ${provider.label} API key below to chat.`);
       return;
@@ -128,7 +119,7 @@ export default function AgentView(): JSX.Element {
         <button
           type="button"
           className="btn-ghost"
-          onClick={() => newThread(activeThread?.providerId ?? AnthropicProvider.id)}
+          onClick={() => newThread(activeThread?.providerId ?? DEFAULT_PROVIDER_ID)}
           title="New chat"
           style={{ marginLeft: 'auto', padding: 4 }}
         >
@@ -156,7 +147,7 @@ export default function AgentView(): JSX.Element {
         />
       )}
 
-      {!apiKeys[activeThread?.providerId ?? AnthropicProvider.id] && (
+      {!isProviderReady(activeThread?.providerId ?? DEFAULT_PROVIDER_ID, apiKeys) && (
         <div
           className="card"
           style={{
@@ -168,14 +159,14 @@ export default function AgentView(): JSX.Element {
           <div style={{ fontSize: 12, marginBottom: 6 }}>
             <KeyRound size={11} style={{ verticalAlign: 'text-bottom', marginRight: 4 }} />
             Add a key for{' '}
-            {providerForId(activeThread?.providerId ?? AnthropicProvider.id).label}
+            {providerForId(activeThread?.providerId ?? DEFAULT_PROVIDER_ID).label}
           </div>
           <input
             type="password"
             placeholder="paste key"
             onChange={(e) =>
               setApiKey(
-                activeThread?.providerId ?? AnthropicProvider.id,
+                activeThread?.providerId ?? DEFAULT_PROVIDER_ID,
                 e.target.value.trim(),
               )
             }
@@ -306,7 +297,7 @@ function ThreadControls({
         value={thread.providerId}
         onChange={(e) => {
           const next = providerForId(e.target.value);
-          onSwap(next.id, next.models[0]!.id, thread.presetId);
+          onSwap(next.id, defaultModelFor(next.id), thread.presetId);
         }}
         style={{ fontSize: 11 }}
       >
