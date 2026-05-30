@@ -352,13 +352,13 @@ export default function App(): JSX.Element {
           </ErrorBoundary>
         </div>
 
-        <div className="workbench__rail">
+        <div className="workbench__rail" role="navigation" aria-label="Activity bar">
           <ErrorBoundary scope="Activity bar">
             <ActivityBar />
           </ErrorBoundary>
         </div>
 
-        <div className="workbench__main" style={{ position: 'relative' }}>
+        <div className="workbench__main" role="main" style={{ position: 'relative' }}>
           <PanelGroup
             direction="horizontal"
             autoSaveId="forze.workbench.horizontal"

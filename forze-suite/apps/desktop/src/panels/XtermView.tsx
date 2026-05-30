@@ -11,8 +11,10 @@ import {
 } from '../lib/pty';
 import { useTerminals, type TerminalSession } from '../workbench/terminalStore';
 
-const MIN_COLS = 80;
-const MIN_ROWS = 24;
+/** xterm always reports ≥1 after a successful fit; guard against a stray 0. */
+function dims(term: Terminal): { cols: number; rows: number } {
+  return { cols: Math.max(1, term.cols), rows: Math.max(1, term.rows) };
+}
 
 /**
  * One xterm.js instance bound to one PTY session. The mount is *deferred*
@@ -43,11 +45,8 @@ export default function XtermView({
       try {
         fitRef.current?.fit();
         if (ptyIdRef.current && termRef.current) {
-          void resizePty(
-            ptyIdRef.current,
-            Math.max(MIN_COLS, termRef.current.cols),
-            Math.max(MIN_ROWS, termRef.current.rows),
-          );
+          const { cols, rows } = dims(termRef.current);
+          void resizePty(ptyIdRef.current, cols, rows);
         }
       } catch {
         /* ignore */
@@ -103,10 +102,15 @@ export default function XtermView({
   }, [visible, session, setPtySessionId]);
 
   // Resize whenever the container resizes (split drag, window resize, etc.).
+  // Debounced: a panel drag fires the ResizeObserver on every pixel, and
+  // hammering pty_resize mid-drag races the PTY and visibly glitches the
+  // redraw. We coalesce to the last size after motion settles.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const onResize = () => {
+    let raf = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const apply = () => {
       const term = termRef.current;
       const fit = fitRef.current;
       if (!term || !fit) return;
@@ -114,15 +118,26 @@ export default function XtermView({
         fit.fit();
         const ptyId = ptyIdRef.current;
         if (ptyId) {
-          void resizePty(
-            ptyId,
-            Math.max(MIN_COLS, term.cols),
-            Math.max(MIN_ROWS, term.rows),
-          );
+          const { cols, rows } = dims(term);
+          void resizePty(ptyId, cols, rows);
         }
       } catch {
         /* terminal not yet ready */
       }
+    };
+    const onResize = () => {
+      // fit() on the next frame for a smooth visual, but defer the PTY resize
+      // until the drag pauses.
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        try {
+          fitRef.current?.fit();
+        } catch {
+          /* not ready */
+        }
+      });
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(apply, 80);
     };
     const observer = new ResizeObserver(onResize);
     observer.observe(container);
@@ -130,6 +145,8 @@ export default function XtermView({
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(raf);
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
@@ -185,7 +202,7 @@ async function initialiseTerminal(
       "'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, monospace",
     fontSize: 12.5,
     lineHeight: 1.35,
-    letterSpacing: 0.1,
+    letterSpacing: 0,
     cursorBlink: true,
     cursorStyle: 'bar',
     allowProposedApi: true,
@@ -218,10 +235,25 @@ async function initialiseTerminal(
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.loadAddon(new WebLinksAddon());
+
+  // Ctrl+L / Cmd+K: clear the screen, shell-agnostic. xterm's own clear wipes
+  // the scrollback and keeps the current prompt line, so it works the same
+  // whether the shell understands `clear`, `cls`, or neither.
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== 'keydown') return true;
+    const isClear =
+      (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'l' || e.key === 'L')) ||
+      (e.metaKey && (e.key === 'k' || e.key === 'K'));
+    if (isClear) {
+      term.clear();
+      return false; // don't forward the keystroke to the PTY
+    }
+    return true;
+  });
+
   term.open(container);
   fit.fit();
-  const safeCols = Math.max(MIN_COLS, term.cols);
-  const safeRows = Math.max(MIN_ROWS, term.rows);
+  const { cols: safeCols, rows: safeRows } = dims(term);
 
   termRef.current = term;
   fitRef.current = fit;
@@ -269,6 +301,11 @@ async function initialiseTerminal(
   });
   ptyIdRef.current = ptyId;
   setPtySessionId(session.id, ptyId);
+
+  // Re-assert the exact size: the backend floors spawn dimensions, so push
+  // the real cols/rows back so the shell's view matches what xterm renders.
+  const { cols, rows } = dims(term);
+  void resizePty(ptyId, cols, rows).catch(() => undefined);
 
   term.focus();
 }

@@ -48,6 +48,8 @@ export default function SocialView(): JSX.Element {
           gap: 2,
           borderBottom: '1px solid var(--color-border)',
         }}
+        role="tablist"
+        aria-label="Social tabs"
       >
         <TabButton id="composer" tab={tab} setTab={setTab} icon={<PencilLine size={12} />}>
           Composer
@@ -89,6 +91,8 @@ function TabButton({
     <button
       type="button"
       onClick={() => setTab(id)}
+      role="tab"
+      aria-selected={active}
       style={{
         display: 'flex',
         alignItems: 'center',

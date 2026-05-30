@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import EditorCanvas, { type EditorHandle } from '../views/EditorCanvas';
 import WelcomeScreen from '../views/WelcomeScreen';
 import ErrorBoundary from './ErrorBoundary';
@@ -6,6 +6,7 @@ import { ensureFileLoaded } from '../workbench/actions';
 import { publishActiveBuffer } from '../workbench/mcpBridge';
 import { PANELS } from '../workbench/panels';
 import { useProject } from '../workbench/projectStore';
+import { useReveal } from '../workbench/reveal';
 import { useWorkbench } from '../workbench/store';
 
 interface EditorAreaProps {
@@ -40,12 +41,32 @@ export default function EditorArea({ registerActiveEditor }: EditorAreaProps): J
     if (activeTab?.filePath) void ensureFileLoaded(activeTab.filePath);
   }, [activeTab?.filePath]);
 
+  const editorApiRef = useRef<EditorHandle | null>(null);
   const refSetter = useCallback(
     (node: EditorHandle | null) => {
+      editorApiRef.current = node;
       registerActiveEditor?.(node);
     },
     [registerActiveEditor],
   );
+
+  // Honour "jump to line" requests (from Search). Wait until the requested
+  // file is the active tab and its content is loaded, then reveal the line.
+  const revealTarget = useReveal((s) => s.filePath);
+  const revealLine = useReveal((s) => s.line);
+  const revealNonce = useReveal((s) => s.nonce);
+  const clearReveal = useReveal((s) => s.clear);
+  useEffect(() => {
+    if (!revealTarget) return;
+    if (!activeTab || activeTab.filePath !== revealTarget) return;
+    if (!buffers.has(revealTarget)) return; // content not loaded yet
+    // Defer a tick so EditorCanvas has re-seeded its value for this file.
+    const id = window.setTimeout(() => {
+      editorApiRef.current?.revealLine(revealLine);
+      clearReveal();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [revealTarget, revealLine, revealNonce, activeTab, buffers, clearReveal]);
 
   const handleChange = useCallback(
     (next: string) => {

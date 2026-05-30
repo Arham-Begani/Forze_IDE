@@ -14,6 +14,8 @@ export interface EditorHandle {
   markDiagnostic: (trace: StackTraceLine) => void;
   clearDiagnostics: () => void;
   getValue: () => string;
+  /** Scroll to and select a 1-based line (used by Search results). */
+  revealLine: (line: number) => void;
 }
 
 interface EditorCanvasProps {
@@ -92,6 +94,29 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
           });
         },
         clearDiagnostics: () => setErrorLines(new Set()),
+        revealLine: (line: number) => {
+          const ta = taRef.current;
+          if (!ta) return;
+          // Read the live textarea value (it reflects the latest content even
+          // if this handle closed over an older `value`).
+          const text = ta.value;
+          const allLines = text.split('\n');
+          const target = Math.max(1, Math.min(line, allLines.length));
+          let start = 0;
+          for (let i = 0; i < target - 1; i++) start += allLines[i]!.length + 1;
+          const end = start + (allLines[target - 1]?.length ?? 0);
+          requestAnimationFrame(() => {
+            ta.focus();
+            ta.setSelectionRange(start, end);
+            // Centre the line. 20px matches the .codeedit line-height.
+            const lineHeight = 20;
+            ta.scrollTop = Math.max(
+              0,
+              (target - 1) * lineHeight - ta.clientHeight / 2 + lineHeight,
+            );
+            syncScroll();
+          });
+        },
       }),
       [value],
     );

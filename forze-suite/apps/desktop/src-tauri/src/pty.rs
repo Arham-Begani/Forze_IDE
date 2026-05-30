@@ -35,12 +35,33 @@ struct PtyExitPayload {
     code: Option<i32>,
 }
 
+/// Default shell. On Windows we match VS Code and use PowerShell rather than
+/// cmd.exe (COMSPEC) — cmd only has `cls`, while PowerShell supports `clear`,
+/// `cls`, and `Clear-Host`, which is what users expect. Prefer PowerShell 7
+/// (`pwsh`) when it's on PATH, otherwise fall back to Windows PowerShell.
+#[cfg(windows)]
 fn default_shell() -> String {
-    if cfg!(windows) {
-        std::env::var("COMSPEC").unwrap_or_else(|_| "powershell.exe".to_string())
-    } else {
-        std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
+    which_on_path("pwsh.exe")
+        .or_else(|| which_on_path("powershell.exe"))
+        .unwrap_or_else(|| "powershell.exe".to_string())
+}
+
+#[cfg(not(windows))]
+fn default_shell() -> String {
+    std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
+}
+
+/// Resolve an executable against PATH (Windows only).
+#[cfg(windows)]
+fn which_on_path(exe: &str) -> Option<String> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join(exe);
+        if candidate.is_file() {
+            return Some(candidate.to_string_lossy().into_owned());
+        }
     }
+    None
 }
 
 #[command]
@@ -107,24 +128,70 @@ pub fn pty_spawn(
 
     state.sessions.lock().insert(session_id.clone(), session);
 
-    // Reader thread: stream raw bytes back to the frontend in chunks.
+    // Reader thread: stream bytes back to the frontend. We must not split a
+    // multi-byte UTF-8 sequence across two reads — doing so makes
+    // `from_utf8_lossy` emit replacement chars (�) and corrupts box-drawing,
+    // spinners, and progress bars (exactly what npm/pnpm/git print). So we
+    // keep a `pending` buffer, emit only the longest valid UTF-8 prefix, and
+    // carry the incomplete tail (≤3 bytes) into the next read.
     let reader_app = app.clone();
     let reader_id = session_id.clone();
     thread::spawn(move || {
-        let mut buf = [0u8; 4096];
+        let mut buf = [0u8; 8192];
         let mut reader = reader;
+        let mut pending: Vec<u8> = Vec::new();
+
+        let emit = |data: String, app: &AppHandle, id: &str| {
+            if data.is_empty() {
+                return;
+            }
+            let _ = app.emit(
+                "pty-output",
+                PtyOutputPayload {
+                    session_id: id.to_string(),
+                    data,
+                },
+            );
+        };
+
         loop {
             match reader.read(&mut buf) {
-                Ok(0) => break,
+                Ok(0) => {
+                    // EOF: flush whatever is left (lossily — the stream is done).
+                    if !pending.is_empty() {
+                        emit(
+                            String::from_utf8_lossy(&pending).into_owned(),
+                            &reader_app,
+                            &reader_id,
+                        );
+                    }
+                    break;
+                }
                 Ok(n) => {
-                    let data = String::from_utf8_lossy(&buf[..n]).into_owned();
-                    let _ = reader_app.emit(
-                        "pty-output",
-                        PtyOutputPayload {
-                            session_id: reader_id.clone(),
-                            data,
-                        },
-                    );
+                    pending.extend_from_slice(&buf[..n]);
+                    let valid_up_to = match std::str::from_utf8(&pending) {
+                        Ok(_) => pending.len(),
+                        Err(e) => e.valid_up_to(),
+                    };
+                    if valid_up_to > 0 {
+                        // SAFETY: bytes [..valid_up_to] are valid UTF-8 by the check above.
+                        let chunk = unsafe {
+                            std::str::from_utf8_unchecked(&pending[..valid_up_to]).to_owned()
+                        };
+                        emit(chunk, &reader_app, &reader_id);
+                        pending.drain(..valid_up_to);
+                    }
+                    // A legitimate incomplete UTF-8 char is at most 3 trailing
+                    // bytes. Anything longer is genuine garbage that will never
+                    // resolve — flush it lossily so the stream can't stall.
+                    if pending.len() >= 4 {
+                        emit(
+                            String::from_utf8_lossy(&pending).into_owned(),
+                            &reader_app,
+                            &reader_id,
+                        );
+                        pending.clear();
+                    }
                 }
                 Err(_) => break,
             }

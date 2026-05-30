@@ -119,10 +119,10 @@ export default function OnboardingWizard(): JSX.Element | null {
   };
 
   return (
-    <div className="cmd-palette__overlay">
+    <div className="cmd-palette__overlay" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
       <div className="wizard">
         <div className="wizard__header">
-          <div className="wizard__step-indicator">
+          <div className="wizard__step-indicator" role="progressbar" aria-valuenow={stepIndex + 1} aria-valuemin={1} aria-valuemax={STEP_ORDER.length} aria-label={`Step ${stepIndex + 1} of ${STEP_ORDER.length}`}>
             {STEP_ORDER.map((id, idx) => (
               <span
                 key={id}
@@ -134,7 +134,7 @@ export default function OnboardingWizard(): JSX.Element | null {
           </div>
           {step === 'welcome' && (
             <>
-              <h2 className="wizard__title">Welcome to Forze IDE</h2>
+              <h2 className="wizard__title" id="wizard-title">Welcome to Forze IDE</h2>
               <p className="wizard__subtitle">
                 The sovereign OS for startup founders. Ship code, distribution, and
                 safety rails from one window.
@@ -143,7 +143,7 @@ export default function OnboardingWizard(): JSX.Element | null {
           )}
           {step === 'tour' && (
             <>
-              <h2 className="wizard__title">What you can do here</h2>
+              <h2 className="wizard__title" id="wizard-title">What you can do here</h2>
               <p className="wizard__subtitle">
                 Seven surfaces that work together. Each one has a real
                 implementation — not a stub.
@@ -152,7 +152,7 @@ export default function OnboardingWizard(): JSX.Element | null {
           )}
           {step === 'workspace' && (
             <>
-              <h2 className="wizard__title">Open a folder</h2>
+              <h2 className="wizard__title" id="wizard-title">Open a folder</h2>
               <p className="wizard__subtitle">
                 Forze treats one folder at a time as the active project. The
                 explorer, git, MCP context, and agents all read from it.
@@ -161,7 +161,7 @@ export default function OnboardingWizard(): JSX.Element | null {
           )}
           {step === 'agent' && (
             <>
-              <h2 className="wizard__title">Connect a model</h2>
+              <h2 className="wizard__title" id="wizard-title">Connect a model</h2>
               <p className="wizard__subtitle">
                 Forze comes with Gemini built in — you can skip this and start
                 chatting right away. Bring your own Gemini or Claude key any
@@ -171,7 +171,7 @@ export default function OnboardingWizard(): JSX.Element | null {
           )}
           {step === 'done' && (
             <>
-              <h2 className="wizard__title">You&apos;re set.</h2>
+              <h2 className="wizard__title" id="wizard-title">You&apos;re set.</h2>
               <p className="wizard__subtitle">
                 Hit <kbd className="kbd-inline">Ctrl</kbd>+
                 <kbd className="kbd-inline">Shift</kbd>+
@@ -190,7 +190,7 @@ export default function OnboardingWizard(): JSX.Element | null {
           {step === 'done' && <DoneBody />}
         </div>
 
-        <div className="wizard__footer">
+        <nav className="wizard__footer" aria-label="Wizard navigation">
           {!isFirst && (
             <button type="button" className="btn-ghost" onClick={goPrev}>
               <ArrowLeft size={12} strokeWidth={1.8} style={{ marginRight: 6 }} />
@@ -209,7 +209,7 @@ export default function OnboardingWizard(): JSX.Element | null {
               <ArrowRight size={12} strokeWidth={1.8} style={{ marginLeft: 6 }} />
             </button>
           )}
-        </div>
+        </nav>
       </div>
     </div>
   );

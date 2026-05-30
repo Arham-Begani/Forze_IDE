@@ -37,6 +37,8 @@ export default function ActivityBar(): JSX.Element {
         className={`rail__item ${isActive ? 'is-active' : ''}`}
         onClick={onClick}
         aria-label={panel.title}
+        aria-current={isActive ? 'page' : undefined}
+        tabIndex={0}
       >
         <Icon size={17} strokeWidth={1.6} />
         <span className="rail__tooltip">{panel.title}</span>

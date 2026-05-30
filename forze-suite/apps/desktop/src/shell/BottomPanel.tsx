@@ -24,12 +24,14 @@ export default function BottomPanel({ logs, onClearLogs }: BottomPanelProps): JS
 
   return (
     <div className="bottom-panel">
-      <div className="bottom-panel__tabs">
+      <div className="bottom-panel__tabs" role="tablist" aria-label="Panel tabs">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             className={`bottom-panel__tab ${activeTab === tab.id ? 'is-active' : ''}`}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             onClick={() => setBottomPanelTab(tab.id)}
           >
             {tab.label}
@@ -58,7 +60,7 @@ export default function BottomPanel({ logs, onClearLogs }: BottomPanelProps): JS
           </button>
         </div>
       </div>
-      <div className="bottom-panel__body">
+      <div className="bottom-panel__body" role="tabpanel" aria-label={activeTab}>
         {activeTab === 'terminal' && <TerminalPanel />}
         {activeTab === 'problems' && <ProblemsPanel />}
         {activeTab === 'output' && <OutputPanel logs={logs} />}
