@@ -16,11 +16,12 @@ export default function TopBar({ onOpenSettings, onToggleSidebar }: TopBarProps)
   const setActiveTab = useWorkbench((s) => s.setActiveTab);
   const closeTab = useWorkbench((s) => s.closeTab);
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
+  const setQuickOpen = useWorkbench((s) => s.setQuickOpen);
 
   const [query, setQuery] = useState('');
 
-  // Open command palette when the user types ⌘P / Ctrl+P AND the search box
-  // already has the prefix `>` — VS Code parity for muscle memory.
+  // A leading `>` switches the box into command mode (VS Code parity): it
+  // opens the command palette. Anything else is treated as a file query.
   useEffect(() => {
     if (query.startsWith('>')) {
       commands.run('workbench.action.showCommands');
@@ -32,7 +33,10 @@ export default function TopBar({ onOpenSettings, onToggleSidebar }: TopBarProps)
     <div className="topbar">
       <div className="topbar__tabs" role="tablist">
         {editorTabs.map((tab) => {
-          const Icon = tab.pageId ? PANELS[tab.pageId].icon : iconForLanguage(tab.language);
+          // Guard against a tab pinned to a page that no longer ships — fall
+          // back to a file icon rather than dereferencing an undefined panel.
+          const pagePanel = tab.pageId ? PANELS[tab.pageId] : undefined;
+          const Icon = pagePanel ? pagePanel.icon : iconForLanguage(tab.language);
           const isActive = tab.id === activeTabId;
           return (
             <button
@@ -86,13 +90,14 @@ export default function TopBar({ onOpenSettings, onToggleSidebar }: TopBarProps)
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && query.trim()) {
-              commands.run('workbench.action.quickOpen');
+            if (e.key === 'Enter') {
+              setQuickOpen(true, query.trim());
+              setQuery('');
             }
             if (e.key === 'Escape') setQuery('');
           }}
-          placeholder="Search"
-          aria-label="Search"
+          placeholder="Go to file…"
+          aria-label="Go to file"
         />
       </div>
 
