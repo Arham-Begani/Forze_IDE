@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Settings,
   KeyRound,
@@ -5,6 +6,8 @@ import {
   FolderOpen,
   CheckCircle2,
   ExternalLink,
+  Loader2,
+  Rocket,
 } from 'lucide-react';
 import { AnthropicProvider, GeminiProvider } from '@forze/agents';
 import { pickFolder } from '../lib/dialog';
@@ -14,6 +17,9 @@ import { usesBuiltInKey } from '../workbench/aiConfig';
 import { openWorkspace } from '../workbench/actions';
 import { useProject } from '../workbench/projectStore';
 import { useSocial } from '../workbench/socialStore';
+import { useIntegrations } from '../workbench/integrationsStore';
+import { verifyToken } from '../lib/vercel';
+import { toast } from '../shell/toast';
 
 export default function SettingsView(): JSX.Element {
   const theme = useTheme((s) => s.theme);
@@ -108,6 +114,8 @@ export default function SettingsView(): JSX.Element {
         />
       </div>
 
+      <VercelCard />
+
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <KeyRound size={13} strokeWidth={1.8} />
@@ -125,6 +133,98 @@ export default function SettingsView(): JSX.Element {
         />
       </div>
     </section>
+  );
+}
+
+function VercelCard(): JSX.Element {
+  const token = useIntegrations((s) => s.vercelToken);
+  const teamId = useIntegrations((s) => s.vercelTeamId);
+  const setVercelToken = useIntegrations((s) => s.setVercelToken);
+  const setVercelTeamId = useIntegrations((s) => s.setVercelTeamId);
+  const [checking, setChecking] = useState(false);
+  const [user, setUser] = useState<string | null>(null);
+
+  const check = async () => {
+    if (!token) return;
+    setChecking(true);
+    try {
+      const u = await verifyToken(token);
+      setUser(u.username);
+      toast(`Connected to Vercel as ${u.username}`, 'success');
+    } catch (err) {
+      setUser(null);
+      toast(err instanceof Error ? err.message : 'Token check failed', 'error');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Rocket size={13} strokeWidth={1.8} />
+        <strong style={{ fontSize: 13 }}>Integrations · Vercel</strong>
+        {user && <CheckCircle2 size={12} style={{ color: 'var(--color-ok)' }} />}
+      </div>
+      <p className="dim">
+        Add a Vercel access token to see and trigger real deployments from the
+        Deployments page. Stored locally.
+      </p>
+      <div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginBottom: 4,
+            fontSize: 12,
+          }}
+        >
+          <span>Access token</span>
+          <a
+            href="https://vercel.com/account/tokens"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              marginLeft: 'auto',
+              color: 'var(--color-accent-bright)',
+              fontSize: 11,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 2,
+              textDecoration: 'none',
+            }}
+          >
+            get token
+            <ExternalLink size={10} />
+          </a>
+        </div>
+        <input
+          type="password"
+          value={token}
+          onChange={(e) => setVercelToken(e.target.value)}
+          placeholder="vercel_…"
+          style={{ width: '100%' }}
+        />
+      </div>
+      <div>
+        <div style={{ fontSize: 12, marginBottom: 4 }}>Team ID (optional)</div>
+        <input
+          value={teamId}
+          onChange={(e) => setVercelTeamId(e.target.value)}
+          placeholder="team_… — leave blank for personal scope"
+          style={{ width: '100%' }}
+        />
+      </div>
+      <div>
+        <button type="button" onClick={check} disabled={!token || checking}>
+          {checking ? (
+            <Loader2 size={12} className="spin" style={{ verticalAlign: 'text-bottom', marginRight: 4 }} />
+          ) : null}
+          {checking ? 'Checking…' : 'Test connection'}
+        </button>
+      </div>
+    </div>
   );
 }
 
