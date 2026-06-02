@@ -17,7 +17,10 @@ interface SidebarProps {
  * into the right sidebar; the right dock can be closed or sent back left.
  */
 export default function Sidebar({ side, panelId, onInsertCode }: SidebarProps): JSX.Element {
-  const panel = PANELS[panelId];
+  // Fall back to Explorer if asked for a panel that no longer exists (e.g. a
+  // stale id from older persisted state). The store sanitizes on load, so this
+  // is a belt-and-suspenders guard against ever dereferencing `undefined`.
+  const panel = PANELS[panelId] ?? PANELS.explorer;
   const dockRight = useWorkbench((s) => s.dockRight);
   const undockRight = useWorkbench((s) => s.undockRight);
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
