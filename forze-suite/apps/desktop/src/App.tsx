@@ -8,6 +8,7 @@ import StatusBar from './shell/StatusBar';
 import TopBar from './shell/TopBar';
 import CommandBar from './shell/CommandBar';
 import CommandPalette from './shell/CommandPalette';
+import QuickOpen from './shell/QuickOpen';
 import OnboardingWizard, { useOnboarding } from './shell/OnboardingWizard';
 import ErrorBoundary from './shell/ErrorBoundary';
 import { ToastHost } from './shell/toast';
@@ -51,6 +52,7 @@ export default function App(): JSX.Element {
   const toggleSidebar = useWorkbench((s) => s.toggleSidebar);
   const toggleBottomPanel = useWorkbench((s) => s.toggleBottomPanel);
   const setCommandPaletteOpen = useWorkbench((s) => s.setCommandPaletteOpen);
+  const setQuickOpen = useWorkbench((s) => s.setQuickOpen);
   const activeTabId = useWorkbench((s) => s.activeTabId);
   const closeTab = useWorkbench((s) => s.closeTab);
   const editorTabs = useWorkbench((s) => s.editorTabs);
@@ -156,7 +158,7 @@ export default function App(): JSX.Element {
         title: 'Go to File…',
         category: 'File',
         keybinding: keybindingHint('workbench.action.quickOpen'),
-        run: () => setCommandPaletteOpen(true),
+        run: () => setQuickOpen(true),
       }),
       commands.register({
         id: 'workbench.action.toggleSidebar',
@@ -255,6 +257,12 @@ export default function App(): JSX.Element {
         run: () => resetOnboarding(),
       }),
       commands.register({
+        id: 'workbench.action.openAgentManager',
+        title: 'Open Agent Manager',
+        category: 'Forze',
+        run: () => useWorkbench.getState().openPage('agent-manager'),
+      }),
+      commands.register({
         id: 'workbench.action.mcp.copyConfig',
         title: 'Copy MCP Config for External Agents',
         category: 'Forze',
@@ -322,6 +330,7 @@ export default function App(): JSX.Element {
     return () => unregs.forEach((u) => u());
   }, [
     setCommandPaletteOpen,
+    setQuickOpen,
     toggleSidebar,
     toggleBottomPanel,
     setBottomPanelTab,
@@ -473,6 +482,7 @@ export default function App(): JSX.Element {
         </div>
       </div>
       <CommandPalette />
+      <QuickOpen />
       <OnboardingWizard />
       <ToastHost />
     </>
