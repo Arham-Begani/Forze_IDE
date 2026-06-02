@@ -1,6 +1,8 @@
-import { Activity, Award, Flame, TrendingUp } from 'lucide-react';
+import { Activity, Award, Code2, Flame, TrendingUp } from 'lucide-react';
 import { achievements, kpis, revenueSeries } from '../../workbench/appData';
 import { AreaSpark, BarMini } from './charts';
+import { useWorkspaceMetrics } from '../../workbench/useWorkspaceMetrics';
+import { formatBytes, formatCount } from '../../lib/projectMetrics';
 
 const userSeries = [
   { label: 'Mon', value: 412 },
@@ -23,6 +25,9 @@ const builderMetrics = [
 ];
 
 export default function AnalyticsPage(): JSX.Element {
+  const { metrics, loading } = useWorkspaceMetrics();
+  const maxLoc = metrics?.languages.reduce((m, l) => Math.max(m, l.loc), 0) ?? 0;
+
   return (
     <div className="apppage">
       <div className="apppage__header">
@@ -35,6 +40,37 @@ export default function AnalyticsPage(): JSX.Element {
       </div>
 
       <div className="apppage__body">
+        {(metrics || loading) && (
+          <div className="appcard">
+            <h3 className="appcard__title">
+              <Code2 size={14} style={{ verticalAlign: -2, marginRight: 6, color: 'var(--color-accent)' }} />
+              Codebase {loading && <span className="dim" style={{ fontSize: 11 }}>· analyzing…</span>}
+            </h3>
+            {metrics && (
+              <>
+                <div className="grid grid-4" style={{ marginBottom: 12 }}>
+                  <div className="kpi"><span className="kpi__label">Files</span><div className="kpi__value">{formatCount(metrics.totalFiles)}</div></div>
+                  <div className="kpi"><span className="kpi__label">Lines of Code{metrics.truncated ? ' (sampled)' : ''}</span><div className="kpi__value">{formatCount(metrics.totalLoc)}</div></div>
+                  <div className="kpi"><span className="kpi__label">Languages</span><div className="kpi__value">{metrics.languages.length}</div></div>
+                  <div className="kpi"><span className="kpi__label">Size on disk</span><div className="kpi__value">{formatBytes(metrics.totalBytes)}</div></div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {metrics.languages.slice(0, 8).map((l) => (
+                    <div key={l.language} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--font-size-sm)' }}>
+                      <span style={{ width: 90, color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{l.language}</span>
+                      <div style={{ flex: 1, height: 8, background: 'var(--color-bg-elevated)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ width: `${maxLoc ? Math.max(3, (l.loc / maxLoc) * 100) : 0}%`, height: '100%', background: 'var(--color-accent)' }} />
+                      </div>
+                      <span className="dim" style={{ width: 130, textAlign: 'right' }}>
+                        {formatCount(l.loc)} loc · {l.files} {l.files === 1 ? 'file' : 'files'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <div className="grid grid-4">
           {kpis.map((k) => (
             <div className="kpi" key={k.label}>
