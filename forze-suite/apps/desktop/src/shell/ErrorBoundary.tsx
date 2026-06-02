@@ -29,6 +29,21 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   reset = (): void => this.setState({ error: null });
 
+  /**
+   * Last-resort recovery: clear the persisted layout/workspace state and
+   * reload. Fixes the "stuck on a crashing view" case where a soft reset just
+   * re-renders the same broken state (e.g. a corrupt or outdated snapshot).
+   */
+  resetLayout = (): void => {
+    try {
+      localStorage.removeItem('forze.workbench.v1');
+      localStorage.removeItem('forze.project.v1');
+    } catch {
+      /* ignore */
+    }
+    window.location.reload();
+  };
+
   override render(): ReactNode {
     const { error } = this.state;
     if (!error) return this.props.children;
@@ -81,9 +96,19 @@ export default class ErrorBoundary extends Component<Props, State> {
         >
           {error.message || String(error)}
         </p>
-        <button type="button" className="btn-primary" onClick={this.reset}>
-          Reset view
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn-primary" onClick={this.reset}>
+            Reset view
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={this.resetLayout}
+            title="Clear saved layout and reload — fixes a view stuck in a crash loop"
+          >
+            Reset layout & reload
+          </button>
+        </div>
       </div>
     );
   }
