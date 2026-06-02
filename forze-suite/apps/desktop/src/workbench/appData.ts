@@ -1,6 +1,6 @@
 /**
  * Static demo data powering the "Startup OS" pages (Dashboard, Deployments,
- * Ad Studio, Marketplace, Community, Team). These are full-area workspace pages
+ * Ad Studio, Community, Team). These are full-area workspace pages
  * opened as editor tabs — see appPages.tsx.
  */
 
@@ -102,29 +102,6 @@ export const socialFormats = [
   'YouTube scripts',
   'Blog posts',
 ];
-
-export type MarketItem = {
-  id: string;
-  name: string;
-  category: string;
-  author: string;
-  price: number | 'Free';
-  rating: number;
-  downloads: string;
-};
-
-export const marketItems: MarketItem[] = [
-  { id: 'm1', name: 'Indie Dark UI Kit', category: 'UI Kit', author: '@northstar', price: 49, rating: 4.9, downloads: '4.2k' },
-  { id: 'm2', name: 'Pricing Block Library', category: 'Component', author: '@ridge', price: 19, rating: 4.7, downloads: '7.8k' },
-  { id: 'm3', name: 'AI Onboarding Workflow', category: 'AI Workflow', author: '@vibe', price: 29, rating: 4.8, downloads: '1.6k' },
-  { id: 'm4', name: 'Auth-in-a-Box', category: 'Backend', author: '@orbit', price: 'Free', rating: 4.6, downloads: '12.3k' },
-  { id: 'm5', name: 'Hover Microinteractions', category: 'Animation', author: '@quill', price: 9, rating: 4.5, downloads: '5.0k' },
-  { id: 'm6', name: 'Stripe Webhook Plugin', category: 'Plugin', author: '@coast', price: 'Free', rating: 4.9, downloads: '9.1k' },
-  { id: 'm7', name: 'Marketplace Template', category: 'Template', author: '@anchor', price: 99, rating: 4.8, downloads: '2.4k' },
-  { id: 'm8', name: 'Founder Toolkit Prompts', category: 'AI Workflow', author: '@drift', price: 19, rating: 4.7, downloads: '3.0k' },
-];
-
-export const marketCategories = ['All', 'UI Kit', 'Component', 'Template', 'AI Workflow', 'Backend', 'Animation', 'Plugin'];
 
 export type CommunityPost = {
   id: string;
