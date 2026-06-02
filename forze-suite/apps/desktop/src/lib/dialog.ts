@@ -14,3 +14,19 @@ export async function pickFolder(): Promise<string | null> {
   if (typeof result === 'string') return result;
   return null;
 }
+
+/**
+ * Native confirm dialog. Uses the Tauri dialog plugin under the shell and falls
+ * back to `window.confirm` in a plain browser preview.
+ */
+export async function confirmDialog(
+  message: string,
+  title = 'Forze',
+): Promise<boolean> {
+  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
+    // eslint-disable-next-line no-alert
+    return window.confirm(message);
+  }
+  const { confirm } = await import('@tauri-apps/plugin-dialog');
+  return confirm(message, { title, kind: 'warning' });
+}
