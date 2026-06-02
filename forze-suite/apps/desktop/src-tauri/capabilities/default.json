@@ -11,6 +11,10 @@
     "shell:allow-open",
     "dialog:default",
     "dialog:allow-open",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://api.vercel.com/*" }]
+    }
   ]
 }
