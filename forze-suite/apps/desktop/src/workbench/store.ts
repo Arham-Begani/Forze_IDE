@@ -12,21 +12,53 @@ export type ActivityId =
   | 'security'
   | 'settings'
   // Startup-OS skills (dockable to the right)
+  | 'agent-manager'
   | 'dashboard'
   | 'analytics'
   | 'deployments'
   | 'ad-studio'
-  | 'marketplace'
+  | 'vibe-stations'
   | 'community'
   | 'team';
 
-/** Skills can be dragged into the right sidebar. */
-export const DOCKABLE_PANELS: ActivityId[] = [
+/** Every activity id the app currently ships. The single source of truth used
+ *  to sanitize persisted state — a removed or renamed panel (e.g. the retired
+ *  Marketplace) left behind in localStorage must never reach a `PANELS[id]`
+ *  lookup, or it dereferences `undefined` and blanks the whole window. */
+export const ALL_ACTIVITY_IDS: readonly ActivityId[] = [
+  'explorer',
+  'search',
+  'source-control',
+  'agents',
+  'social',
+  'vibe',
+  'security',
+  'settings',
+  'agent-manager',
   'dashboard',
   'analytics',
   'deployments',
   'ad-studio',
-  'marketplace',
+  'vibe-stations',
+  'community',
+  'team',
+];
+
+const KNOWN_ACTIVITY = new Set<string>(ALL_ACTIVITY_IDS);
+
+/** Narrow an arbitrary persisted value to a currently-shipping activity id. */
+export function isKnownActivity(id: unknown): id is ActivityId {
+  return typeof id === 'string' && KNOWN_ACTIVITY.has(id);
+}
+
+/** Skills can be dragged into the right sidebar. The Vibe Stations grid is
+ *  intentionally excluded — its terminals need full-area width to be usable. */
+export const DOCKABLE_PANELS: ActivityId[] = [
+  'agent-manager',
+  'dashboard',
+  'analytics',
+  'deployments',
+  'ad-studio',
   'community',
   'team',
 ];
@@ -39,11 +71,12 @@ export function isDockable(id: ActivityId): boolean {
  *  plain strings) so the store needn't import the panel registry, which would
  *  pull every view component into this module and risk an import cycle. */
 export const PAGE_TITLES: Partial<Record<ActivityId, string>> = {
+  'agent-manager': 'Agent Manager',
   dashboard: 'Dashboard',
   analytics: 'Analytics',
   deployments: 'Deployments',
   'ad-studio': 'Ad Studio',
-  marketplace: 'Marketplace',
+  'vibe-stations': 'Vibe Stations',
   community: 'Community',
   team: 'Team',
 };
@@ -91,6 +124,11 @@ interface WorkbenchState {
   /** Is the command palette open? */
   commandPaletteOpen: boolean;
 
+  /** Is Quick Open (Go to File) open? */
+  quickOpenOpen: boolean;
+  /** Seed text for Quick Open (e.g. text typed in the top-bar search box). */
+  quickOpenSeed: string;
+
   setActiveActivity: (id: ActivityId) => void;
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
@@ -114,6 +152,7 @@ interface WorkbenchState {
   markTabDirty: (id: string, isDirty: boolean) => void;
 
   setCommandPaletteOpen: (open: boolean) => void;
+  setQuickOpen: (open: boolean, seed?: string) => void;
 }
 
 const DEFAULT_TAB: EditorTab = {
@@ -123,6 +162,52 @@ const DEFAULT_TAB: EditorTab = {
   language: 'markdown',
   isDirty: false,
 };
+
+const KNOWN_BOTTOM_TABS = new Set<BottomPanelTab>([
+  'terminal',
+  'problems',
+  'output',
+  'agent',
+]);
+
+/**
+ * Scrub a persisted snapshot so state saved by an older build can never crash
+ * the shell. Anything that points at a panel/tab the app no longer ships (the
+ * classic "removed a page, old localStorage still references it" upgrade bug)
+ * is reset to a safe default. Runs on every rehydrate via the persist `merge`,
+ * so existing broken state self-heals on the next load.
+ */
+function sanitizePersisted(
+  persisted: Partial<WorkbenchState>,
+): Partial<WorkbenchState> {
+  const next: Partial<WorkbenchState> = { ...persisted };
+
+  if (!isKnownActivity(next.activeActivity)) next.activeActivity = 'explorer';
+
+  if (next.rightPanel != null && !isKnownActivity(next.rightPanel)) {
+    next.rightPanel = null;
+    next.rightSidebarVisible = false;
+  }
+
+  if (next.bottomPanelTab && !KNOWN_BOTTOM_TABS.has(next.bottomPanelTab)) {
+    next.bottomPanelTab = 'agent';
+  }
+
+  if (Array.isArray(next.editorTabs)) {
+    const tabs = next.editorTabs.filter(
+      (t): t is EditorTab =>
+        !!t &&
+        typeof t.id === 'string' &&
+        (t.pageId == null || isKnownActivity(t.pageId)),
+    );
+    next.editorTabs = tabs.length > 0 ? tabs : [DEFAULT_TAB];
+    if (!next.editorTabs.some((t) => t.id === next.activeTabId)) {
+      next.activeTabId = next.editorTabs[0]?.id ?? 'welcome';
+    }
+  }
+
+  return next;
+}
 
 export const useWorkbench = create<WorkbenchState>()(
   persist(
@@ -143,6 +228,8 @@ export const useWorkbench = create<WorkbenchState>()(
       activeTabId: 'welcome',
 
       commandPaletteOpen: false,
+      quickOpenOpen: false,
+      quickOpenSeed: '',
 
       setActiveActivity: (id) =>
         set((state) => {
@@ -236,9 +323,19 @@ export const useWorkbench = create<WorkbenchState>()(
         })),
 
       setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
+      setQuickOpen: (quickOpenOpen, seed) =>
+        set({ quickOpenOpen, quickOpenSeed: seed ?? '' }),
     }),
     {
       name: 'forze.workbench.v1',
+      // Always sanitize persisted state on rehydrate so a snapshot from an
+      // older build (referencing a since-removed panel) can't crash the shell.
+      // Done via `merge` (runs every load) rather than a version bump, so the
+      // user keeps their good layout/tabs while only the stale bits are reset.
+      merge: (persisted, current) => ({
+        ...current,
+        ...sanitizePersisted((persisted ?? {}) as Partial<WorkbenchState>),
+      }),
       partialize: (state) => ({
         activeActivity: state.activeActivity,
         sidebarVisible: state.sidebarVisible,
