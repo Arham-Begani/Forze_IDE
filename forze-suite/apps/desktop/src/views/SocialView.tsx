@@ -2,6 +2,7 @@ import {
   CalendarDays,
   ChartLine,
   ListChecks,
+  Loader2,
   Megaphone,
   PencilLine,
   Send,
@@ -16,6 +17,10 @@ import {
   type Platform,
 } from '@forze/shared/publishing';
 import { useSocial, type ScheduledPost } from '../workbench/socialStore';
+import { generateText } from '../lib/ai';
+import { getGitDiff } from '../lib/tauri';
+import { useProject } from '../workbench/projectStore';
+import { toast } from '../shell/toast';
 
 type SocialTab = 'composer' | 'queue' | 'calendar' | 'analytics';
 
@@ -127,7 +132,47 @@ function ComposerTab(): JSX.Element {
   const [mediaUrls, setMediaUrls] = useState('');
   const [scheduledFor, setScheduledFor] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [drafting, setDrafting] = useState(false);
+  const workspaceRoot = useProject((s) => s.workspaceRoot);
   const limit = captionLimitFor(platform);
+
+  const draftWithAgent = async () => {
+    if (drafting) return;
+    setDrafting(true);
+    setError(null);
+    try {
+      let diff = '';
+      try {
+        diff = (await getGitDiff(workspaceRoot ?? undefined)).slice(0, 6000);
+      } catch {
+        /* not a git repo / no diff — draft from scratch */
+      }
+      const context = diff
+        ? `Here is the latest git diff for context:\n\n${diff}`
+        : 'There is no git diff available; write a general build-in-public update.';
+      const text = await generateText(
+        `Draft a ${platformLabel(platform)} post sharing what I just shipped. ` +
+          `Keep it under ${limit} characters, authentic founder voice, no hashtags unless natural. ` +
+          `Return only the post text.\n\n${context}`,
+        {
+          system:
+            'You write concise, specific build-in-public posts for a startup founder. ' +
+            'No fluff, no emoji spam, no placeholders.',
+          maxTokens: 600,
+        },
+      );
+      if (text) {
+        setCaption(text.slice(0, limit));
+        toast('Draft ready — review and schedule', 'success');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      toast(message, 'error');
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   const handleSchedule = (publishNow: boolean) => {
     setError(null);
@@ -276,20 +321,17 @@ function ComposerTab(): JSX.Element {
         </button>
         <button
           type="button"
-          title="Hand off to @marketing agent"
-          onClick={() => {
-            // The marketing agent reads via MCP; for now we just point the
-            // founder at it. A future polish wires this directly into the
-            // active agent thread.
-            // eslint-disable-next-line no-alert
-            window.alert(
-              'Open the Agents activity and pick the @marketing preset to draft a post grounded in your latest git diff.',
-            );
-          }}
+          title="Draft this post with AI, grounded in your latest git diff"
+          onClick={() => void draftWithAgent()}
+          disabled={drafting}
           style={{ marginLeft: 'auto' }}
         >
-          <Sparkles size={12} style={{ verticalAlign: 'text-bottom', marginRight: 4 }} />
-          Draft via agent
+          {drafting ? (
+            <Loader2 size={12} className="spin" style={{ verticalAlign: 'text-bottom', marginRight: 4 }} />
+          ) : (
+            <Sparkles size={12} style={{ verticalAlign: 'text-bottom', marginRight: 4 }} />
+          )}
+          {drafting ? 'Drafting…' : 'Draft via agent'}
         </button>
       </div>
     </div>
