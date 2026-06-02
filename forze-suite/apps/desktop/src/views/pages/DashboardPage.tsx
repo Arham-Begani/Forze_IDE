@@ -13,13 +13,14 @@ import {
 } from 'lucide-react';
 import {
   kpis,
-  quickActions,
   recentActivity,
   revenueSeries,
   topReferrers,
 } from '../../workbench/appData';
 import { AreaSpark, DonutChart } from './charts';
-import { toast } from '../../shell/toast';
+import { useWorkbench } from '../../workbench/store';
+import { useWorkspaceMetrics } from '../../workbench/useWorkspaceMetrics';
+import { formatBytes, formatCount } from '../../lib/projectMetrics';
 
 const KPI_ICONS = [Users, DollarSign, BarChart3, TrendingUp];
 
@@ -30,11 +31,38 @@ const REFERRER_COLORS = {
   Other: '#334155', // Dark slate
 };
 
+interface QuickAction {
+  label: string;
+  run: () => void;
+}
+
 export default function DashboardPage(): JSX.Element {
+  const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
+  const openPage = useWorkbench((s) => s.openPage);
+  const setBottomPanelTab = useWorkbench((s) => s.setBottomPanelTab);
+  const { metrics, loading } = useWorkspaceMetrics();
+
   const styledReferrers = topReferrers.map((r) => ({
     ...r,
     color: REFERRER_COLORS[r.name as keyof typeof REFERRER_COLORS] ?? r.color,
   }));
+
+  // Real workspace metrics when a folder is open; demo KPIs otherwise.
+  const displayKpis = metrics
+    ? [
+        { label: 'Files', value: formatCount(metrics.totalFiles), delta: formatBytes(metrics.totalBytes) },
+        { label: 'Lines of Code', value: formatCount(metrics.totalLoc), delta: metrics.truncated ? 'sampled' : 'counted' },
+        { label: 'Languages', value: String(metrics.languages.length), delta: metrics.languages[0]?.language ?? '—' },
+        { label: 'Repo Size', value: formatBytes(metrics.totalBytes), delta: loading ? 'updating…' : 'on disk' },
+      ]
+    : kpis;
+
+  const quickActions: QuickAction[] = [
+    { label: 'Open Agent Chat', run: () => setActiveActivity('agents') },
+    { label: 'Run Terminal', run: () => setBottomPanelTab('terminal') },
+    { label: 'Launch Campaign', run: () => openPage('ad-studio') },
+    { label: 'View Analytics', run: () => openPage('analytics') },
+  ];
 
   return (
     <div className="apppage">
@@ -50,7 +78,7 @@ export default function DashboardPage(): JSX.Element {
         <button
           className="btn-accent"
           type="button"
-          onClick={() => toast('Deploying to production…', 'success')}
+          onClick={() => openPage('deployments')}
         >
           <Rocket size={15} /> Deploy
         </button>
@@ -58,7 +86,7 @@ export default function DashboardPage(): JSX.Element {
 
       <div className="apppage__body">
         <div className="grid grid-4">
-          {kpis.map((k, i) => {
+          {displayKpis.map((k, i) => {
             const Icon = KPI_ICONS[i] ?? Users;
             return (
               <div className="kpi" key={k.label}>
@@ -128,13 +156,13 @@ export default function DashboardPage(): JSX.Element {
             <h3 className="appcard__title">Quick Actions</h3>
             {quickActions.map((q) => (
               <button
-                key={q}
+                key={q.label}
                 type="button"
                 className="list-row"
                 style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', display: 'flex', padding: '12px 0' }}
-                onClick={() => toast(`${q}…`)}
+                onClick={q.run}
               >
-                <span style={{ flex: 1, color: 'var(--color-text-muted)', fontWeight: 500 }}>{q}</span>
+                <span style={{ flex: 1, color: 'var(--color-text-muted)', fontWeight: 500 }}>{q.label}</span>
                 <ChevronRight size={15} color="var(--color-text-dim)" />
               </button>
             ))}
