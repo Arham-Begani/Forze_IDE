@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Award,
   Calendar,
@@ -5,15 +6,15 @@ import {
   MessageCircle,
   MessagesSquare,
   Rocket,
+  Send,
   Trophy,
+  X,
 } from 'lucide-react';
-import {
-  communityPosts,
-  demoDay,
-  leaderboard,
-  type CommunityPost,
-} from '../../workbench/appData';
+import { demoDay, leaderboard, type CommunityPost } from '../../workbench/appData';
+import { useCommunity } from '../../workbench/communityStore';
 import { toast } from '../../shell/toast';
+
+const TAGS: CommunityPost['tag'][] = ['build-log', 'showcase', 'launch', 'milestone'];
 
 function tagPill(tag: CommunityPost['tag']): JSX.Element {
   const cls =
@@ -25,6 +26,22 @@ function tagPill(tag: CommunityPost['tag']): JSX.Element {
 }
 
 export default function CommunityPage(): JSX.Element {
+  const posts = useCommunity((s) => s.posts);
+  const addPost = useCommunity((s) => s.addPost);
+  const toggleLike = useCommunity((s) => s.toggleLike);
+
+  const [composing, setComposing] = useState(false);
+  const [body, setBody] = useState('');
+  const [tag, setTag] = useState<CommunityPost['tag']>('build-log');
+
+  const submit = () => {
+    if (!body.trim()) return;
+    addPost(body, tag);
+    setBody('');
+    setComposing(false);
+    toast('Posted to the community feed', 'success');
+  };
+
   return (
     <div className="apppage">
       <div className="apppage__header">
@@ -36,15 +53,44 @@ export default function CommunityPage(): JSX.Element {
             Build logs, showcases, launches — and Demo Day every Friday.
           </p>
         </div>
-        <button className="btn-accent" type="button" onClick={() => toast('Draft a new post')}>
-          New post
+        <button className="btn-accent" type="button" onClick={() => setComposing((c) => !c)}>
+          {composing ? <X size={15} /> : <Send size={15} />}
+          {composing ? 'Cancel' : 'New post'}
         </button>
       </div>
 
       <div className="apppage__body">
         <div className="grid" style={{ gridTemplateColumns: '1fr 320px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {communityPosts.map((p) => (
+            {composing && (
+              <div className="appcard">
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={3}
+                  placeholder="Share a build log, milestone, or launch…"
+                  style={{ width: '100%' }}
+                  autoFocus
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                  <select value={tag} onChange={(e) => setTag(e.target.value as CommunityPost['tag'])} style={{ fontSize: 12 }}>
+                    {TAGS.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn-accent"
+                    type="button"
+                    style={{ marginLeft: 'auto' }}
+                    onClick={submit}
+                    disabled={!body.trim()}
+                  >
+                    <Send size={13} /> Post
+                  </button>
+                </div>
+              </div>
+            )}
+            {posts.map((p) => (
               <div className="appcard" key={p.id}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span className="avatar" style={{ borderRadius: '50%' }}>
@@ -62,7 +108,22 @@ export default function CommunityPage(): JSX.Element {
                   {p.body}
                 </p>
                 <div style={{ display: 'flex', gap: 16, marginTop: 12, color: 'var(--color-text-dim)', fontSize: 'var(--font-size-xs)' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Heart size={13} /> {p.reactions}</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleLike(p.id)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: p.liked ? 'var(--color-danger)' : 'var(--color-text-dim)',
+                      padding: 0,
+                    }}
+                  >
+                    <Heart size={13} fill={p.liked ? 'var(--color-danger)' : 'none'} /> {p.reactions}
+                  </button>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><MessageCircle size={13} /> {p.comments}</span>
                 </div>
               </div>
