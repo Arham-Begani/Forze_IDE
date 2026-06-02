@@ -1,7 +1,11 @@
 import {
   basename,
+  createDir,
+  createFile,
+  deletePath,
   languageFromPath,
   readFile,
+  renamePath,
   startWatching,
   stopWatching,
   writeFile,
@@ -120,6 +124,60 @@ export async function saveActiveTab(currentValue: string | null): Promise<void> 
   await writeFile(tab.filePath, currentValue);
   project.setBuffer(tab.filePath, currentValue);
   workbench.markTabDirty(tab.id, false);
+}
+
+/** True when `child` is the same path as, or nested under, `parent`. */
+function isUnder(child: string, parent: string): boolean {
+  return (
+    child === parent ||
+    child.startsWith(`${parent}/`) ||
+    child.startsWith(`${parent}\\`)
+  );
+}
+
+/** Create a new empty file at `path`, then open it in a tab. */
+export async function createNewFile(path: string): Promise<void> {
+  await createFile(path);
+  await openFile(path);
+}
+
+/** Create a new (possibly nested) folder at `path`. */
+export async function createNewFolder(path: string): Promise<void> {
+  await createDir(path);
+}
+
+/**
+ * Delete a file or directory, then close any editor tabs (and drop buffers)
+ * for the path or anything nested beneath it.
+ */
+export async function deleteEntry(path: string): Promise<void> {
+  await deletePath(path);
+  const workbench = useWorkbench.getState();
+  const project = useProject.getState();
+  for (const tab of workbench.editorTabs) {
+    if (tab.filePath && isUnder(tab.filePath, path)) {
+      workbench.closeTab(tab.id);
+      project.clearBuffer(tab.filePath);
+    }
+  }
+}
+
+/**
+ * Rename/move `from` → `to`. If a tab for `from` is open it is re-opened at the
+ * new path (carrying its cached buffer) so the editor follows the rename.
+ */
+export async function renameEntry(from: string, to: string): Promise<void> {
+  await renamePath(from, to);
+  const workbench = useWorkbench.getState();
+  const project = useProject.getState();
+  const openTab = workbench.editorTabs.find((t) => t.filePath === from);
+  if (openTab) {
+    const buffer = project.getBuffer(from);
+    workbench.closeTab(openTab.id);
+    project.clearBuffer(from);
+    if (buffer !== undefined) project.setBuffer(to, buffer);
+    await openFile(to);
+  }
 }
 
 export function isPathInsideWorkspace(filePath: string): boolean {
