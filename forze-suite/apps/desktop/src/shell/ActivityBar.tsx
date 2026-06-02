@@ -1,3 +1,5 @@
+import { LayoutGrid } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useWorkbench } from '../workbench/store';
 import { CORE_PANELS, SKILL_PANELS } from '../workbench/panels';
 
@@ -11,31 +13,22 @@ export default function ActivityBar(): JSX.Element {
   const editorTabs = useWorkbench((s) => s.editorTabs);
   const activeTabId = useWorkbench((s) => s.activeTabId);
 
+  const [launcherOpen, setLauncherOpen] = useState(false);
+
   const activePageId =
     editorTabs.find((t) => t.id === activeTabId)?.pageId ?? null;
+  const skillActive = SKILL_PANELS.some((p) => p.id === activePageId);
 
-  const renderItem = (
-    panel: { id: typeof activeActivity; title: string; icon: typeof CORE_PANELS[number]['icon'] },
-    isSkill = false,
-  ) => {
+  const renderItem = (panel: { id: typeof activeActivity; title: string; icon: typeof CORE_PANELS[number]['icon'] }) => {
     const Icon = panel.icon;
-    let isActive: boolean;
-    let onClick: () => void;
-    if (isSkill) {
-      // Skills open as full-area workspace tabs, not in the side dock.
-      isActive = activePageId === panel.id;
-      onClick = () => openPage(panel.id);
-    } else {
-      const dockedRight = rightPanel === panel.id && rightSidebarVisible;
-      isActive = (activeActivity === panel.id && sidebarVisible) || dockedRight;
-      onClick = () => setActiveActivity(panel.id);
-    }
+    const dockedRight = rightPanel === panel.id && rightSidebarVisible;
+    const isActive = (activeActivity === panel.id && sidebarVisible) || dockedRight;
     return (
       <button
         key={panel.id}
         type="button"
         className={`rail__item ${isActive ? 'is-active' : ''}`}
-        onClick={onClick}
+        onClick={() => setActiveActivity(panel.id)}
         aria-label={panel.title}
         aria-current={isActive ? 'page' : undefined}
         tabIndex={0}
@@ -59,9 +52,119 @@ export default function ActivityBar(): JSX.Element {
       <div className="rail__divider" style={{ marginTop: 2, marginBottom: 6 }} />
       {core.map((p) => renderItem(p))}
       <div className="rail__divider" />
-      {SKILL_PANELS.map((p) => renderItem(p, true))}
+
+      <AppsLauncher
+        open={launcherOpen}
+        active={skillActive}
+        activePageId={activePageId}
+        onToggle={() => setLauncherOpen((v) => !v)}
+        onClose={() => setLauncherOpen(false)}
+        onPick={(id) => {
+          openPage(id);
+          setLauncherOpen(false);
+        }}
+      />
+
       <div className="rail__spacer" />
       {settings && renderItem(settings)}
     </nav>
+  );
+}
+
+function AppsLauncher({
+  open,
+  active,
+  activePageId,
+  onToggle,
+  onClose,
+  onPick,
+}: {
+  open: boolean;
+  active: boolean;
+  activePageId: string | null;
+  onToggle: () => void;
+  onClose: () => void;
+  onPick: (id: typeof SKILL_PANELS[number]['id']) => void;
+}): JSX.Element {
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  // Anchor the popover to the launcher button (fixed, so it escapes the rail).
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.top, left: r.right + 10 });
+  }, [open]);
+
+  // Dismiss on outside click or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (
+        !popRef.current?.contains(e.target as Node) &&
+        !btnRef.current?.contains(e.target as Node)
+      ) {
+        onClose();
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, onClose]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className={`rail__item ${active || open ? 'is-active' : ''}`}
+        onClick={onToggle}
+        aria-label="Apps"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        tabIndex={0}
+      >
+        <LayoutGrid size={17} strokeWidth={1.6} />
+        <span className="rail__tooltip">Apps</span>
+      </button>
+
+      {open && (
+        <div
+          ref={popRef}
+          className="applauncher"
+          role="menu"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          <div className="applauncher__title">Apps</div>
+          <div className="applauncher__grid">
+            {SKILL_PANELS.map((panel) => {
+              const Icon = panel.icon;
+              const isActive = activePageId === panel.id;
+              return (
+                <button
+                  key={panel.id}
+                  type="button"
+                  role="menuitem"
+                  className={`applauncher__item ${isActive ? 'is-active' : ''}`}
+                  onClick={() => onPick(panel.id)}
+                >
+                  <span className="applauncher__icon">
+                    <Icon size={18} strokeWidth={1.7} />
+                  </span>
+                  <span className="applauncher__label">{panel.title}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
