@@ -210,9 +210,20 @@ pub fn pty_spawn(
         .ok_or_else(|| "session disappeared before watcher started".to_string())?;
 
     thread::spawn(move || {
-        let exit_code = {
-            let mut child = session_handle.lock();
-            child.wait().ok().map(|status| status.exit_code() as i32)
+        // Poll with `try_wait` and release the child lock between checks rather
+        // than holding it across a blocking `wait()`. Holding it would deadlock
+        // `pty_kill` (which needs the same lock to kill the child) — so closing
+        // or restarting a station would hang the command thread forever.
+        let exit_code = loop {
+            let status = {
+                let mut child = session_handle.lock();
+                child.try_wait()
+            };
+            match status {
+                Ok(Some(status)) => break Some(status.exit_code() as i32),
+                Ok(None) => thread::sleep(std::time::Duration::from_millis(120)),
+                Err(_) => break None,
+            }
         };
         let _ = watcher_app.emit(
             "pty-exit",
