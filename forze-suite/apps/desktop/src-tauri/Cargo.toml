@@ -28,3 +28,27 @@ parking_lot = "0.12"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+# Dev rebuilds (`tauri dev`) default to full debuginfo (debug = 2) for every
+# crate — the bulk of the multi-GB target dir, a big share of Windows link time
+# (link.exe writing PDBs), and extra peak memory per rustc. Line tables keep
+# readable panic backtraces (file:line) while cutting all three.
+[profile.dev]
+debug = "line-tables-only"
+
+# Release (`tauri build`) tuned for a small, lean shipped binary — which also
+# means a lower runtime memory footprint, the binding constraint on this
+# machine. `opt-level = "s"` optimizes for size (this app is IO-bound, so the
+# tiny speed trade vs "3" is irrelevant) and `lto = "thin"` gets most of the
+# cross-crate size/speed win while staying far lighter on build memory than fat
+# LTO (fat LTO links all bitcode in one process and would risk OOM on 7.7 GB).
+#
+# NOTE: we deliberately do NOT set `panic = "abort"`. With abort, any panic on
+# any thread (e.g. a PTY reader/watcher) instantly kills the whole window with
+# no recovery — exactly the "press one button and it crashes" failure. With the
+# default unwind, a panic inside a #[command] is caught by Tauri and returned to
+# JS as an error, and a panic in a spawned worker thread just ends that thread.
+# `strip` is left off so panic backtraces keep file:line for diagnosis.
+[profile.release]
+opt-level = "s"
+lto = "thin"
