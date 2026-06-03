@@ -117,7 +117,33 @@ fn npm_executable() -> &'static str {
     "npm"
 }
 
+/// Record panics to a log file and stderr instead of letting them disappear.
+/// A packaged Windows GUI app has no attached console, so without this a panic
+/// (now that we unwind rather than abort) would be invisible. The previous build
+/// shipped `panic = "abort"` + `strip`, so a crash left nothing to look at —
+/// this makes the next one diagnosable: `%TEMP%\forze-ide-panic.log`.
+fn install_panic_logger() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let when = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let line = format!("[forze] PANIC @unix:{when}: {info}\n");
+        eprintln!("{line}");
+        let path = std::env::temp_dir().join("forze-ide-panic.log");
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+        default_hook(info);
+    }));
+}
+
 pub fn run() {
+    install_panic_logger();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
