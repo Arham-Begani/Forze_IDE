@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  ArrowUpCircle,
+  Ban,
   CheckCircle2,
   Cloud,
   ExternalLink,
+  FileText,
   GitBranch,
   KeyRound,
   Loader2,
   Plug,
+  RefreshCw,
   Rocket,
+  RotateCcw,
   ShieldCheck,
+  Wrench,
   XCircle,
 } from 'lucide-react';
 import {
@@ -21,11 +27,18 @@ import { toast } from '../../shell/toast';
 import { useIntegrations } from '../../workbench/integrationsStore';
 import { useProject } from '../../workbench/projectStore';
 import { useWorkbench } from '../../workbench/store';
+import { basename } from '../../lib/fs';
+import { toProjectName } from '../../lib/deployLocal';
+import { deployWithAutoFix } from '../../lib/deployHeal';
 import {
+  cancelDeployment,
   createGitDeployment,
+  isInProgress,
   listDeployments,
   listEnv,
   listProjects,
+  promoteDeployment,
+  redeployDeployment,
   verifyToken,
   type DeployState,
   type VercelDeployment,
@@ -69,6 +82,7 @@ export default function DeploymentsPage(): JSX.Element {
   const projectId = useIntegrations((s) => s.vercelProjectId);
   const setProjectId = useIntegrations((s) => s.setVercelProjectId);
   const branch = useProject((s) => s.branch);
+  const workspaceRoot = useProject((s) => s.workspaceRoot);
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
 
   const connected = token.length > 0;
@@ -79,9 +93,16 @@ export default function DeploymentsPage(): JSX.Element {
   const [envs, setEnvs] = useState<VercelEnvVar[]>([]);
   const [loading, setLoading] = useState(false);
   const [deploying, setDeploying] = useState(false);
+  const [folderDeploying, setFolderDeploying] = useState(false);
+  const [folderProgress, setFolderProgress] = useState('');
+  const [autoFix, setAutoFix] = useState(true);
+  const [folderLog, setFolderLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** uid of the deployment whose row action is currently running. */
+  const [busyUid, setBusyUid] = useState<string | null>(null);
 
   const selectedProject = projects.find((p) => p.id === projectId) ?? null;
+  const anyInProgress = rows.some((d) => isInProgress(d.state));
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -119,6 +140,59 @@ export default function DeploymentsPage(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, token, teamId, projectId]);
 
+  // While anything is building/queued, poll so the live status advances on its
+  // own (otherwise a just-triggered deploy is stuck showing "Queued" forever).
+  useEffect(() => {
+    if (!connected || !anyInProgress) return;
+    const id = setInterval(() => void refresh(), 5000);
+    return () => clearInterval(id);
+  }, [connected, anyInProgress, refresh]);
+
+  const runRowAction = async (
+    uid: string,
+    action: () => Promise<void>,
+    okMessage: string,
+  ) => {
+    setBusyUid(uid);
+    try {
+      await action();
+      toast(okMessage, 'success');
+      setTimeout(() => void refresh(), 1200);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Action failed', 'error');
+    } finally {
+      setBusyUid(null);
+    }
+  };
+
+  const redeploy = (d: VercelDeployment) =>
+    runRowAction(
+      d.uid,
+      async () => {
+        await redeployDeployment(token, { deployment: d, teamId: teamId || undefined });
+      },
+      `Re-deploying ${d.name}…`,
+    );
+
+  const cancel = (d: VercelDeployment) =>
+    runRowAction(
+      d.uid,
+      () => cancelDeployment(token, d.uid, teamId || undefined),
+      `Canceled ${d.name}`,
+    );
+
+  const promote = (d: VercelDeployment) => {
+    if (!projectId) {
+      toast('Select a project first', 'warn');
+      return;
+    }
+    void runRowAction(
+      d.uid,
+      () => promoteDeployment(token, projectId, d.uid, teamId || undefined),
+      `Promoted ${d.url} to production`,
+    );
+  };
+
   const newDeployment = async () => {
     if (!connected) {
       setActiveActivity('settings');
@@ -143,6 +217,52 @@ export default function DeploymentsPage(): JSX.Element {
       toast(err instanceof Error ? err.message : 'Deploy failed', 'error');
     } finally {
       setDeploying(false);
+    }
+  };
+
+  /** Deploy the folder currently open in the IDE as its own Vercel project. */
+  const deployFolder = async () => {
+    if (!connected) {
+      setActiveActivity('settings');
+      return;
+    }
+    if (!workspaceRoot) {
+      toast('Open a folder first (File → Open Folder)', 'warn');
+      return;
+    }
+    const name = toProjectName(basename(workspaceRoot));
+    setFolderDeploying(true);
+    setFolderProgress('Scanning…');
+    setFolderLog([`Deploying "${name}"${autoFix ? ' with auto-fix' : ''}…`]);
+    const log = (line: string) => setFolderLog((prev) => [...prev, line]);
+    try {
+      const result = await deployWithAutoFix({
+        token,
+        root: workspaceRoot,
+        name,
+        teamId: teamId || undefined,
+        target: 'production',
+        autoFix,
+        onPhase: (phase) => setFolderProgress(phase),
+        onLog: log,
+      });
+      if (result.state === 'READY') {
+        const fixed = result.fixes.reduce((n, f) => n + f.length, 0);
+        toast(
+          `Deployed ${name} → ${result.url}${fixed ? ` (auto-fixed ${fixed} file${fixed === 1 ? '' : 's'})` : ''}`,
+          'success',
+        );
+      } else {
+        toast(`Deploy ${result.state.toLowerCase()} after ${result.attempts} attempt(s). See deploy log.`, 'error');
+      }
+      setTimeout(() => void refresh(), 2000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Folder deploy failed';
+      log(`Error: ${msg}`);
+      toast(msg, 'error');
+    } finally {
+      setFolderDeploying(false);
+      setFolderProgress('');
     }
   };
 
@@ -173,14 +293,68 @@ export default function DeploymentsPage(): JSX.Element {
               ))}
             </select>
           )}
+          {connected && (
+            <button
+              className="btn-outline"
+              type="button"
+              onClick={() => void refresh()}
+              disabled={loading}
+              title="Refresh deployments"
+            >
+              <RefreshCw size={14} className={loading ? 'spin' : undefined} />
+            </button>
+          )}
+          {connected && selectedProject && (
+            <button
+              className="btn-outline"
+              type="button"
+              onClick={() => void newDeployment()}
+              disabled={deploying || folderDeploying}
+              title={`Redeploy the linked project "${selectedProject.name}" from git`}
+            >
+              {deploying ? <Loader2 size={14} className="spin" /> : <GitBranch size={14} />}
+              {deploying ? 'Deploying…' : 'Redeploy Project'}
+            </button>
+          )}
+          {connected && (
+            <label
+              title="On a failed build, read the logs and let the AI patch your files, then redeploy (up to 3 tries)."
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: 12,
+                color: 'var(--color-text-dim)',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={autoFix}
+                onChange={(e) => setAutoFix(e.target.checked)}
+                disabled={folderDeploying}
+              />
+              <Wrench size={12} /> Auto-fix
+            </label>
+          )}
           <button
             className="btn-accent"
             type="button"
-            onClick={() => void newDeployment()}
-            disabled={deploying}
+            onClick={() => void deployFolder()}
+            disabled={folderDeploying || deploying}
+            title={
+              workspaceRoot
+                ? `Deploy the open folder (${basename(workspaceRoot)}) to Vercel`
+                : 'Open a folder to deploy it'
+            }
           >
-            {deploying ? <Loader2 size={15} className="spin" /> : <Rocket size={15} />}
-            {connected ? (deploying ? 'Deploying…' : 'New Deployment') : 'Connect Vercel'}
+            {folderDeploying ? <Loader2 size={15} className="spin" /> : <Rocket size={15} />}
+            {!connected
+              ? 'Connect Vercel'
+              : folderDeploying
+                ? folderProgress || 'Deploying…'
+                : 'Deploy This Folder'}
           </button>
         </div>
       </div>
@@ -208,6 +382,56 @@ export default function DeploymentsPage(): JSX.Element {
           </div>
         )}
 
+        {folderLog.length > 0 && (
+          <div className="appcard" style={{ padding: 0, overflow: 'hidden' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 12px',
+                borderBottom: '1px solid rgba(var(--color-overlay-rgb), 0.06)',
+              }}
+            >
+              {folderDeploying ? (
+                <Loader2 size={13} className="spin" color="var(--color-accent)" />
+              ) : (
+                <Rocket size={13} color="var(--color-accent)" />
+              )}
+              <strong style={{ fontSize: 12 }}>Deploy log</strong>
+              {folderDeploying && folderProgress && (
+                <span style={{ fontSize: 11, color: 'var(--color-text-dim)' }}>{folderProgress}</span>
+              )}
+              <button
+                className="icon-btn"
+                type="button"
+                title="Clear log"
+                style={{ marginLeft: 'auto' }}
+                onClick={() => setFolderLog([])}
+                disabled={folderDeploying}
+              >
+                <XCircle size={13} />
+              </button>
+            </div>
+            <pre
+              style={{
+                margin: 0,
+                padding: '10px 12px',
+                maxHeight: 220,
+                overflow: 'auto',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                lineHeight: 1.5,
+                color: 'var(--color-text)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {folderLog.join('\n')}
+            </pre>
+          </div>
+        )}
+
         <div className="appcard" style={{ padding: 0, overflow: 'hidden' }}>
           {connected && loading && rows.length === 0 ? (
             <div style={{ padding: 24, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-text-dim)' }}>
@@ -223,12 +447,13 @@ export default function DeploymentsPage(): JSX.Element {
                   <th>Target</th>
                   <th>URL</th>
                   <th>Age</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ color: 'var(--color-text-dim)', padding: 16 }}>
+                    <td colSpan={7} style={{ color: 'var(--color-text-dim)', padding: 16 }}>
                       No deployments yet for this project.
                     </td>
                   </tr>
@@ -260,6 +485,58 @@ export default function DeploymentsPage(): JSX.Element {
                       </a>
                     </td>
                     <td style={{ color: 'var(--color-text-dim)' }}>{ago(d.created)}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                        {busyUid === d.uid ? (
+                          <Loader2 size={14} className="spin" style={{ color: 'var(--color-text-dim)' }} />
+                        ) : (
+                          <>
+                            {isInProgress(d.state) ? (
+                              <button
+                                className="icon-btn"
+                                type="button"
+                                title="Cancel deployment"
+                                onClick={() => void cancel(d)}
+                              >
+                                <Ban size={14} />
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  className="icon-btn"
+                                  type="button"
+                                  title="Redeploy"
+                                  onClick={() => void redeploy(d)}
+                                >
+                                  <RotateCcw size={14} />
+                                </button>
+                                {d.state === 'READY' && (
+                                  <button
+                                    className="icon-btn"
+                                    type="button"
+                                    title="Promote to production"
+                                    onClick={() => promote(d)}
+                                  >
+                                    <ArrowUpCircle size={14} />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {d.inspectorUrl && (
+                              <a
+                                className="icon-btn"
+                                href={d.inspectorUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="View build logs"
+                              >
+                                <FileText size={14} />
+                              </a>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
