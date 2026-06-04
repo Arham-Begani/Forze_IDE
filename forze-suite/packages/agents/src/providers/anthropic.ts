@@ -66,7 +66,8 @@ export async function* generate(
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      // Strip CR so CRLF-delimited streams (`\r\n\r\n`) still split on `\n\n`.
+      buffer += decoder.decode(value, { stream: true }).replace(/\r/g, '');
 
       // SSE events are separated by blank lines.
       let separator = buffer.indexOf('\n\n');
