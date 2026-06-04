@@ -10,10 +10,69 @@ import {
   writePty,
 } from '../lib/pty';
 import { useTerminals, type TerminalSession } from '../workbench/terminalStore';
+import { useTheme } from '../theme/themeStore';
 
 /** xterm always reports ≥1 after a successful fit; guard against a stray 0. */
 function dims(term: Terminal): { cols: number; rows: number } {
   return { cols: Math.max(1, term.cols), rows: Math.max(1, term.rows) };
+}
+
+/** ANSI palette for the dark themes (the matte-black canvas). */
+const DARK_XTERM_THEME = {
+  background: '#050505',
+  foreground: '#e4e4e7',
+  cursor: '#ffffff',
+  cursorAccent: '#050505',
+  selectionBackground: 'rgba(255, 255, 255, 0.18)',
+  black: '#050505',
+  red: '#ff7170',
+  green: '#7ee787',
+  yellow: '#d7d7d7',
+  blue: '#00d4ff',
+  magenta: '#74ecff',
+  cyan: '#9cdcfe',
+  white: '#dcdde6',
+  brightBlack: '#5a5d68',
+  brightRed: '#ff9090',
+  brightGreen: '#9ae6a4',
+  brightYellow: '#e5e5e5',
+  brightBlue: '#74ecff',
+  brightMagenta: '#a9f4ff',
+  brightCyan: '#c9efff',
+  brightWhite: '#f4f4f7',
+} as const;
+
+/** ANSI palette for the Daylight (light) theme — white canvas, dark ink. */
+const LIGHT_XTERM_THEME = {
+  background: '#ffffff',
+  foreground: '#1f2328',
+  cursor: '#0e7490',
+  cursorAccent: '#ffffff',
+  selectionBackground: 'rgba(14, 116, 144, 0.18)',
+  black: '#24292f',
+  red: '#cf222e',
+  green: '#116329',
+  yellow: '#7d4e00',
+  blue: '#0969da',
+  magenta: '#8250df',
+  cyan: '#1b7c83',
+  white: '#6e7781',
+  brightBlack: '#57606a',
+  brightRed: '#a40e26',
+  brightGreen: '#1a7f37',
+  brightYellow: '#633c01',
+  brightBlue: '#218bff',
+  brightMagenta: '#a475f9',
+  brightCyan: '#3192aa',
+  brightWhite: '#8c959f',
+} as const;
+
+/** xterm paints to a canvas, so it can't read CSS tokens — pick the palette
+ *  off the active theme id on the root element instead. */
+export function xtermThemeFor(): typeof DARK_XTERM_THEME | typeof LIGHT_XTERM_THEME {
+  return document.documentElement.dataset.theme === 'forze-daylight'
+    ? LIGHT_XTERM_THEME
+    : DARK_XTERM_THEME;
 }
 
 /**
@@ -36,6 +95,13 @@ export default function XtermView({
   const ptyIdRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const setPtySessionId = useTerminals((s) => s.setPtySessionId);
+  const theme = useTheme((s) => s.theme);
+
+  // Recolor an already-mounted terminal when the IDE theme changes; xterm
+  // can't read the CSS tokens itself, so we hand it the matching palette.
+  useEffect(() => {
+    if (termRef.current) termRef.current.options.theme = xtermThemeFor();
+  }, [theme]);
 
   // Defer the heavy mount until the container is both visible and sized.
   useEffect(() => {
@@ -206,30 +272,10 @@ async function initialiseTerminal(
     cursorBlink: true,
     cursorStyle: 'bar',
     allowProposedApi: true,
-    scrollback: 8000,
-    theme: {
-      background: '#050505',
-      foreground: '#e4e4e7',
-      cursor: '#ffffff',
-      cursorAccent: '#050505',
-      selectionBackground: 'rgba(255, 255, 255, 0.18)',
-      black: '#050505',
-      red: '#ff7170',
-      green: '#7ee787',
-      yellow: '#ffd866',
-      blue: '#79c0ff',
-      magenta: '#f472b6',
-      cyan: '#9cdcfe',
-      white: '#dcdde6',
-      brightBlack: '#5a5d68',
-      brightRed: '#ff9090',
-      brightGreen: '#9ae6a4',
-      brightYellow: '#fcd34d',
-      brightBlue: '#93c5fd',
-      brightMagenta: '#f9a8d4',
-      brightCyan: '#c9efff',
-      brightWhite: '#f4f4f7',
-    },
+    // Each scrollback line is a retained cell buffer; a grid of terminals at
+    // 8000 lines was a real memory sink. 1500 keeps plenty of history.
+    scrollback: 1500,
+    theme: xtermThemeFor(),
   });
 
   const fit = new FitAddon();
