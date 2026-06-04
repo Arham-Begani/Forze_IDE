@@ -10,6 +10,8 @@ import {
   subscribeToPtyOutput,
   writePty,
 } from '../lib/pty';
+import { useTheme } from '../theme/themeStore';
+import { xtermThemeFor } from './XtermView';
 
 /** xterm always reports ≥1 after a successful fit; guard against a stray 0. */
 function dims(term: Terminal): { cols: number; rows: number } {
@@ -17,10 +19,37 @@ function dims(term: Terminal): { cols: number; rows: number } {
 }
 
 /**
+ * Gap between agent-CLI launches when several stations boot at once.
+ * Each agent (Claude Code, codex, opencode's Bun runtime, …) does a big memory
+ * allocation during startup. Firing all of them in the same instant spikes RAM
+ * hard enough to OOM a constrained box — codex panics with "memory allocation
+ * failed", Bun dies with an illegal instruction. Staggering lets each agent get
+ * past its heavy init before the next one starts.
+ */
+const AGENT_LAUNCH_GAP_MS = 2500;
+
+/**
+ * One global queue that serialises the *actual* CLI launch keystrokes across
+ * every mounted station, so agents boot one-at-a-time with a breathing gap
+ * instead of stampeding system memory all at once.
+ */
+let agentLaunchQueue: Promise<unknown> = Promise.resolve();
+function enqueueAgentLaunch(run: () => void): void {
+  agentLaunchQueue = agentLaunchQueue
+    .catch(() => undefined)
+    .then(() => {
+      run();
+      return new Promise((resolve) =>
+        window.setTimeout(resolve, AGENT_LAUNCH_GAP_MS),
+      );
+    });
+}
+
+/**
  * A self-contained xterm.js terminal bound to its own PTY, used by the Vibe
  * Stations grid. Unlike the bottom-panel `XtermView` this isn't tied to the
  * terminal store and is always mounted visible — so it spawns immediately once
- * its container is measured. After the shell starts it auto-types
+ * its container is measured. Once the shell's prompt has settled it types
  * `launchCommand` (e.g. `claude`) so the chosen coding agent boots in place.
  *
  * Remounting (a new React `key`) gives a clean restart: the old PTY is killed
@@ -39,6 +68,13 @@ export default function VibeTerminal({
   const ptyIdRef = useRef<string | null>(null);
   const disposedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const theme = useTheme((s) => s.theme);
+
+  // Recolor an already-mounted terminal when the IDE theme changes; xterm
+  // can't read the CSS tokens itself, so we hand it the matching palette.
+  useEffect(() => {
+    if (termRef.current) termRef.current.options.theme = xtermThemeFor();
+  }, [theme]);
 
   // Spawn once the container has real dimensions. Spawning into a 0×0 box makes
   // the PTY start with cols=0/rows=0 and deadlocks the read thread — the same
@@ -46,6 +82,12 @@ export default function VibeTerminal({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    // Reset the disposed flag on (re)mount. React 18 StrictMode mounts, unmounts
+    // (which flips disposedRef to true via the teardown effect below), then
+    // remounts in dev — without this reset the second, real mount would spawn a
+    // PTY and immediately kill it as if already disposed, leaving a dead box you
+    // can't type into and that prints nothing.
+    disposedRef.current = false;
     let cancelled = false;
 
     const rafId = window.requestAnimationFrame(async () => {
@@ -147,7 +189,7 @@ export default function VibeTerminal({
       style={{
         position: 'absolute',
         inset: 0,
-        padding: '8px 6px 4px 10px',
+        padding: '10px 8px 8px 13px',
         background: 'var(--color-terminal-bg, #050505)',
       }}
       onMouseDown={() => termRef.current?.focus()}
@@ -181,36 +223,16 @@ async function initialiseTerminal(
   const term = new Terminal({
     fontFamily:
       "'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, monospace",
-    fontSize: 11.5,
-    lineHeight: 1.3,
+    fontSize: 12,
+    lineHeight: 1.35,
     letterSpacing: 0,
     cursorBlink: true,
     cursorStyle: 'bar',
     allowProposedApi: true,
-    scrollback: 8000,
-    theme: {
-      background: '#050505',
-      foreground: '#e4e4e7',
-      cursor: '#ffffff',
-      cursorAccent: '#050505',
-      selectionBackground: 'rgba(255, 255, 255, 0.18)',
-      black: '#050505',
-      red: '#ff7170',
-      green: '#7ee787',
-      yellow: '#ffd866',
-      blue: '#79c0ff',
-      magenta: '#f472b6',
-      cyan: '#9cdcfe',
-      white: '#dcdde6',
-      brightBlack: '#5a5d68',
-      brightRed: '#ff9090',
-      brightGreen: '#9ae6a4',
-      brightYellow: '#fcd34d',
-      brightBlue: '#93c5fd',
-      brightMagenta: '#f9a8d4',
-      brightCyan: '#c9efff',
-      brightWhite: '#f4f4f7',
-    },
+    // A grid of these at 8000-line scrollback each was a real memory sink on a
+    // RAM-constrained box; 1500 lines is still ample history per terminal.
+    scrollback: 1500,
+    theme: xtermThemeFor(),
   });
 
   const fit = new FitAddon();
@@ -237,11 +259,43 @@ async function initialiseTerminal(
   termRef.current = term;
   fitRef.current = fit;
 
+  // Auto-launch the agent CLI by *typing* it into the live shell — but only
+  // once the shell is actually at its prompt. We can't trust a fixed delay:
+  // cold-starting several PowerShell instances at once leaves the prompt not
+  // ready, so a timed keystroke lands in a half-initialised shell and is lost.
+  // Instead we wait for the shell's startup output to go quiet (it prints its
+  // banner/prompt, then stops), and send the command on that trailing edge. A
+  // hard fallback fires if output never settles, so the launch can't stall.
+  let launched = false;
+  let promptTimer: ReturnType<typeof setTimeout> | undefined;
+  const launchAgent = () => {
+    if (launched || disposedRef.current) return;
+    const id = ptyIdRef.current;
+    if (!id || !launchCommand) return;
+    launched = true;
+    if (promptTimer) clearTimeout(promptTimer);
+    // Serialise the launch so agents don't all spike memory at once. Re-check
+    // liveness when our turn comes up — the station may have closed while we
+    // waited in the queue.
+    enqueueAgentLaunch(() => {
+      if (disposedRef.current) return;
+      const liveId = ptyIdRef.current;
+      if (!liveId) return;
+      void writePty(liveId, `${launchCommand}\r`).catch(() => undefined);
+    });
+  };
+
   // Subscribe before spawn so the first chunk isn't missed.
   const unsubscribe = await subscribeToPtyOutput(
     (payload) => {
       if (payload.session_id !== ptyIdRef.current) return;
       term.write(payload.data);
+      // Debounce on the prompt: each chunk pushes the launch back, so we only
+      // fire after the shell has been quiet (settled at its prompt) for 350ms.
+      if (launchCommand && !launched) {
+        if (promptTimer) clearTimeout(promptTimer);
+        promptTimer = setTimeout(launchAgent, 350);
+      }
     },
     (payload) => {
       if (payload.session_id !== ptyIdRef.current) return;
@@ -270,6 +324,8 @@ async function initialiseTerminal(
     });
   });
 
+  // Spawn a plain interactive shell — exactly what the (working) bottom-panel
+  // terminal does. The agent CLI is then typed in once the prompt settles.
   const ptyId = await spawnPty({
     cwd: cwd ?? undefined,
     cols: safeCols,
@@ -288,11 +344,9 @@ async function initialiseTerminal(
 
   term.focus();
 
-  // Let the shell print its first prompt, then launch the agent CLI.
+  // Hard fallback: if the shell never produces settling output (so the
+  // debounce above never fires), launch anyway after a generous delay.
   if (launchCommand) {
-    window.setTimeout(() => {
-      if (disposedRef.current || ptyIdRef.current !== ptyId) return;
-      void writePty(ptyId, `${launchCommand}\r`).catch(() => undefined);
-    }, 600);
+    window.setTimeout(launchAgent, 4000);
   }
 }
