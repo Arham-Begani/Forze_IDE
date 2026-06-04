@@ -6,7 +6,6 @@ export type ActivityId =
   | 'explorer'
   | 'search'
   | 'source-control'
-  | 'agents'
   | 'social'
   | 'vibe'
   | 'security'
@@ -29,7 +28,6 @@ export const ALL_ACTIVITY_IDS: readonly ActivityId[] = [
   'explorer',
   'search',
   'source-control',
-  'agents',
   'social',
   'vibe',
   'security',
@@ -81,7 +79,7 @@ export const PAGE_TITLES: Partial<Record<ActivityId, string>> = {
   team: 'Team',
 };
 
-export type BottomPanelTab = 'terminal' | 'problems' | 'output' | 'agent';
+export type BottomPanelTab = 'terminal' | 'problems' | 'output';
 
 export interface EditorTab {
   id: string;
@@ -129,6 +127,9 @@ interface WorkbenchState {
   /** Seed text for Quick Open (e.g. text typed in the top-bar search box). */
   quickOpenSeed: string;
 
+  /** Is the floating Forze Assistant chat bubble expanded? */
+  assistantOpen: boolean;
+
   setActiveActivity: (id: ActivityId) => void;
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
@@ -153,6 +154,9 @@ interface WorkbenchState {
 
   setCommandPaletteOpen: (open: boolean) => void;
   setQuickOpen: (open: boolean, seed?: string) => void;
+
+  setAssistantOpen: (open: boolean) => void;
+  toggleAssistant: () => void;
 }
 
 const DEFAULT_TAB: EditorTab = {
@@ -167,7 +171,6 @@ const KNOWN_BOTTOM_TABS = new Set<BottomPanelTab>([
   'terminal',
   'problems',
   'output',
-  'agent',
 ]);
 
 /**
@@ -190,7 +193,7 @@ function sanitizePersisted(
   }
 
   if (next.bottomPanelTab && !KNOWN_BOTTOM_TABS.has(next.bottomPanelTab)) {
-    next.bottomPanelTab = 'agent';
+    next.bottomPanelTab = 'terminal';
   }
 
   if (Array.isArray(next.editorTabs)) {
@@ -222,7 +225,7 @@ export const useWorkbench = create<WorkbenchState>()(
 
       bottomPanelVisible: false,
       bottomPanelHeight: 260,
-      bottomPanelTab: 'agent',
+      bottomPanelTab: 'terminal',
 
       editorTabs: [DEFAULT_TAB],
       activeTabId: 'welcome',
@@ -230,6 +233,7 @@ export const useWorkbench = create<WorkbenchState>()(
       commandPaletteOpen: false,
       quickOpenOpen: false,
       quickOpenSeed: '',
+      assistantOpen: false,
 
       setActiveActivity: (id) =>
         set((state) => {
@@ -325,6 +329,9 @@ export const useWorkbench = create<WorkbenchState>()(
       setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
       setQuickOpen: (quickOpenOpen, seed) =>
         set({ quickOpenOpen, quickOpenSeed: seed ?? '' }),
+
+      setAssistantOpen: (assistantOpen) => set({ assistantOpen }),
+      toggleAssistant: () => set((state) => ({ assistantOpen: !state.assistantOpen })),
     }),
     {
       name: 'forze.workbench.v1',
