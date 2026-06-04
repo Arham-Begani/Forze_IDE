@@ -306,6 +306,7 @@ function ThemeSwatch({
   onSelect: () => void;
 }): JSX.Element {
   const palette = SAMPLE_PALETTES[id];
+  const accent = THEME_ACCENTS[id];
   return (
     <button
       type="button"
@@ -323,9 +324,33 @@ function ThemeSwatch({
       }}
     >
       <div style={{ display: 'flex', height: 50 }}>
-        <div style={{ width: 8, background: palette.rail }} />
+        <div
+          style={{
+            width: 8,
+            background: palette.rail,
+            borderRight: `2px solid ${accent}`,
+          }}
+        />
         <div style={{ width: 36, background: palette.sidebar }} />
-        <div style={{ flex: 1, background: palette.editor }} />
+        <div
+          style={{
+            flex: 1,
+            background: palette.editor,
+            display: 'flex',
+            alignItems: 'flex-end',
+            padding: 6,
+          }}
+        >
+          <span
+            style={{
+              width: 22,
+              height: 5,
+              borderRadius: 99,
+              background: accent,
+              boxShadow: `0 0 6px ${accent}`,
+            }}
+          />
+        </div>
       </div>
       <div style={{ padding: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -360,6 +385,13 @@ const SAMPLE_PALETTES: Record<ThemeId, {
     sidebar: '#090909',
     rail: '#050505',
   },
+  'forze-daylight': {
+    bg: '#e9eaee',
+    fg: '#16191d',
+    editor: '#ffffff',
+    sidebar: '#f4f5f7',
+    rail: '#ffffff',
+  },
   'forze-midnight': {
     bg: '#12141a',
     fg: '#ffffff',
@@ -374,4 +406,60 @@ const SAMPLE_PALETTES: Record<ThemeId, {
     sidebar: '#101012',
     rail: '#0d0d0e',
   },
+  'forze-indigo': {
+    bg: '#111111',
+    fg: '#ffffff',
+    editor: '#050505',
+    sidebar: '#090909',
+    rail: '#050505',
+  },
+  'forze-emerald': {
+    bg: '#111111',
+    fg: '#ffffff',
+    editor: '#050505',
+    sidebar: '#090909',
+    rail: '#050505',
+  },
+  'forze-amber': {
+    bg: '#111111',
+    fg: '#ffffff',
+    editor: '#050505',
+    sidebar: '#090909',
+    rail: '#050505',
+  },
+  'forze-rose': {
+    bg: '#111111',
+    fg: '#ffffff',
+    editor: '#050505',
+    sidebar: '#090909',
+    rail: '#050505',
+  },
+  'forze-violet': {
+    bg: '#111111',
+    fg: '#ffffff',
+    editor: '#050505',
+    sidebar: '#090909',
+    rail: '#050505',
+  },
+  'forze-crimson': {
+    bg: '#111111',
+    fg: '#ffffff',
+    editor: '#050505',
+    sidebar: '#090909',
+    rail: '#050505',
+  },
+};
+
+// Accent swatch shown on each theme card (mirrors --color-accent per theme).
+const THEME_ACCENTS: Record<ThemeId, string> = {
+  'forze-noir': '#00d4ff',
+  'forze-daylight': '#0e7490',
+  'forze-midnight': '#00d4ff',
+  'forze-graphite': '#00d4ff',
+  'forze-indigo': '#6366f1',
+  'forze-emerald': '#10b981',
+  'forze-amber': '#f5a623',
+  'forze-rose': '#fb7185',
+  'forze-violet': '#a855f7',
+  'forze-crimson': '#f43f5e',
 };
