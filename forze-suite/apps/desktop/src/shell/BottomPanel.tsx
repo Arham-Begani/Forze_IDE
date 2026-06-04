@@ -3,7 +3,6 @@ import { useWorkbench, type BottomPanelTab } from '../workbench/store';
 import TerminalPanel from '../panels/TerminalPanel';
 import ProblemsPanel from '../panels/ProblemsPanel';
 import OutputPanel from '../panels/OutputPanel';
-import AgentPanel from '../panels/AgentPanel';
 
 interface BottomPanelProps {
   logs: string[];
@@ -14,7 +13,6 @@ const TABS: { id: BottomPanelTab; label: string }[] = [
   { id: 'terminal', label: 'Terminal' },
   { id: 'problems', label: 'Problems' },
   { id: 'output', label: 'Output' },
-  { id: 'agent', label: 'Agent' },
 ];
 
 export default function BottomPanel({ logs, onClearLogs }: BottomPanelProps): JSX.Element {
@@ -64,7 +62,6 @@ export default function BottomPanel({ logs, onClearLogs }: BottomPanelProps): JS
         {activeTab === 'terminal' && <TerminalPanel />}
         {activeTab === 'problems' && <ProblemsPanel />}
         {activeTab === 'output' && <OutputPanel logs={logs} />}
-        {activeTab === 'agent' && <AgentPanel />}
       </div>
     </div>
   );
