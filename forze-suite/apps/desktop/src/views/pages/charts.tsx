@@ -76,7 +76,7 @@ export function AreaSpark({
             y1={y(data[marIndex]!.value)}
             x2={x(marIndex)}
             y2={height - pad}
-            stroke="rgba(99, 102, 241, 0.45)"
+            stroke="rgba(0, 212, 255, 0.45)"
             strokeWidth={1}
             strokeDasharray="3 3"
           />

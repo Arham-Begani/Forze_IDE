@@ -25,7 +25,7 @@ export default function VibeStationsPage(): JSX.Element {
   const remaining = MAX_STATIONS - stations.length;
 
   return (
-    <div className="apppage">
+    <div className="apppage vibepage">
       <header className="apppage__header">
         <div>
           <h1 className="apppage__title">
