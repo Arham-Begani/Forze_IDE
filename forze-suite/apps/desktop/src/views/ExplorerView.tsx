@@ -81,14 +81,31 @@ export default function ExplorerView(): JSX.Element {
 
   // Refresh root listing on fs events. Lazy — only the visible root level is
   // re-fetched; expanded subdirectories refresh themselves on next open.
+  // Debounced so a burst (git checkout, save-all, a build touching many files)
+  // coalesces into a single re-read instead of a re-render storm.
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
-    void subscribeToFsEvents(() => {
-      setRefreshTick((tick) => tick + 1);
-    }).then((u) => {
-      unsubscribe = u;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        setRefreshTick((tick) => tick + 1);
+      }, 250);
+    };
+    void subscribeToFsEvents(schedule).then((u) => {
+      // The component may have unmounted before the listener resolved; tear it
+      // down immediately so we never leak a handler (which would multiply the
+      // event volume across StrictMode remounts / hot reloads).
+      if (disposed) u();
+      else unsubscribe = u;
     });
-    return () => unsubscribe?.();
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {
