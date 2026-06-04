@@ -29,7 +29,10 @@ interface FeatureCard {
   title: string;
   desc: string;
   icon: LucideIcon;
-  action: { kind: 'activity'; id: ActivityId } | { kind: 'panel'; id: 'terminal' };
+  action:
+    | { kind: 'activity'; id: ActivityId }
+    | { kind: 'panel'; id: 'terminal' }
+    | { kind: 'assistant' };
 }
 
 const FEATURES: FeatureCard[] = [
@@ -37,7 +40,7 @@ const FEATURES: FeatureCard[] = [
     title: 'Chat to build',
     desc: 'Describe a feature in plain English — Forze writes and edits the files for you, in context.',
     icon: Bot,
-    action: { kind: 'activity', id: 'agents' },
+    action: { kind: 'assistant' },
   },
   {
     title: 'Vibe Canvas',
@@ -79,6 +82,7 @@ export default function WelcomeScreen(): JSX.Element {
   );
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
   const setBottomPanelTab = useWorkbench((s) => s.setBottomPanelTab);
+  const setAssistantOpen = useWorkbench((s) => s.setAssistantOpen);
   const openPage = useWorkbench((s) => s.openPage);
 
   const submit = (): void => {
@@ -180,7 +184,9 @@ export default function WelcomeScreen(): JSX.Element {
               type="button"
               className="feature-card"
               onClick={() => {
-                if (feature.action.kind === 'panel') {
+                if (feature.action.kind === 'assistant') {
+                  setAssistantOpen(true);
+                } else if (feature.action.kind === 'panel') {
                   setBottomPanelTab(feature.action.id);
                 } else if (isDockable(feature.action.id)) {
                   // Skills open as full-area workspace tabs.

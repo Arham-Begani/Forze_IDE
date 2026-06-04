@@ -25,10 +25,10 @@ import { formatBytes, formatCount } from '../../lib/projectMetrics';
 const KPI_ICONS = [Users, DollarSign, BarChart3, TrendingUp];
 
 const REFERRER_COLORS = {
-  Twitter: '#818cf8', // Indigo (the single accent)
-  Direct: '#cbd5e1', // Light slate
-  Google: '#64748b', // Mid slate
-  Other: '#334155', // Dark slate
+  Twitter: '#00d4ff',
+  Direct: '#e5e5e5',
+  Google: '#8f9499',
+  Other: '#474747',
 };
 
 interface QuickAction {
@@ -37,7 +37,7 @@ interface QuickAction {
 }
 
 export default function DashboardPage(): JSX.Element {
-  const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
+  const setAssistantOpen = useWorkbench((s) => s.setAssistantOpen);
   const openPage = useWorkbench((s) => s.openPage);
   const setBottomPanelTab = useWorkbench((s) => s.setBottomPanelTab);
   const { metrics, loading } = useWorkspaceMetrics();
@@ -58,7 +58,7 @@ export default function DashboardPage(): JSX.Element {
     : kpis;
 
   const quickActions: QuickAction[] = [
-    { label: 'Open Agent Chat', run: () => setActiveActivity('agents') },
+    { label: 'Ask Forze', run: () => setAssistantOpen(true) },
     { label: 'Run Terminal', run: () => setBottomPanelTab('terminal') },
     { label: 'Launch Campaign', run: () => openPage('ad-studio') },
     { label: 'View Analytics', run: () => openPage('analytics') },
@@ -99,8 +99,8 @@ export default function DashboardPage(): JSX.Element {
                     width: '32px',
                     height: '32px',
                     borderRadius: '8px',
-                    background: 'rgba(99, 102, 241, 0.08)',
-                    border: '1px solid rgba(99, 102, 241, 0.15)',
+                    background: 'rgba(0, 212, 255, 0.08)',
+                    border: '1px solid rgba(0, 212, 255, 0.18)',
                     color: 'var(--color-accent-bright)',
                   }}>
                     <Icon size={16} strokeWidth={2} />
@@ -172,4 +172,3 @@ export default function DashboardPage(): JSX.Element {
     </div>
   );
 }
-
