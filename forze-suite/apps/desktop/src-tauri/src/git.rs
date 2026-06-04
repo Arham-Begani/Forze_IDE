@@ -164,3 +164,19 @@ pub fn git_diff_file(cwd: String, path: String, staged: bool) -> Result<String, 
     args.push(path.as_str());
     run_git(&cwd, &args)
 }
+
+/// The committed (HEAD) contents of a file, used as the baseline for the
+/// editor's live change gutter (VS Code-style dirty diff). Returns an empty
+/// string when the file isn't tracked in HEAD (a new file) so the whole buffer
+/// reads as added rather than erroring. `path` is repo-relative with forward
+/// slashes.
+#[command]
+pub fn git_file_head(cwd: String, path: String) -> Result<String, String> {
+    let spec = format!("HEAD:{path}");
+    match run_git(&cwd, &["show", &spec]) {
+        Ok(contents) => Ok(contents),
+        // `git show` fails for paths absent from HEAD (untracked/new files) and
+        // when there's no HEAD yet (fresh repo). Treat both as "no baseline".
+        Err(_) => Ok(String::new()),
+    }
+}
