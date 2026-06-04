@@ -1224,12 +1224,14 @@ dependencies = [
 name = "forze-ide"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "keyring",
  "notify",
  "parking_lot",
  "portable-pty",
  "serde",
  "serde_json",
+ "sha1",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

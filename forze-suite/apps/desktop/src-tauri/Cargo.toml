@@ -24,6 +24,8 @@ notify = "6.1"
 portable-pty = "0.8"
 uuid = { version = "1", features = ["v4"] }
 parking_lot = "0.12"
+sha1 = "0.10"
+base64 = "0.22"
 
 [features]
 default = ["custom-protocol"]
