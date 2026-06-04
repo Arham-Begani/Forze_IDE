@@ -2,6 +2,7 @@ import { LayoutGrid } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useWorkbench } from '../workbench/store';
 import { CORE_PANELS, SKILL_PANELS } from '../workbench/panels';
+import { changeCount, useGitStatus, useGitStatusPolling } from '../workbench/gitStatusStore';
 
 export default function ActivityBar(): JSX.Element {
   const activeActivity = useWorkbench((s) => s.activeActivity);
@@ -15,6 +16,11 @@ export default function ActivityBar(): JSX.Element {
 
   const [launcherOpen, setLauncherOpen] = useState(false);
 
+  // Live git change count for the Source Control badge (polled centrally so it
+  // shows even when the panel is closed, VS Code-style).
+  useGitStatusPolling();
+  const scmCount = changeCount(useGitStatus((s) => s.report));
+
   const activePageId =
     editorTabs.find((t) => t.id === activeTabId)?.pageId ?? null;
   const skillActive = SKILL_PANELS.some((p) => p.id === activePageId);
@@ -23,17 +29,21 @@ export default function ActivityBar(): JSX.Element {
     const Icon = panel.icon;
     const dockedRight = rightPanel === panel.id && rightSidebarVisible;
     const isActive = (activeActivity === panel.id && sidebarVisible) || dockedRight;
+    const badge = panel.id === 'source-control' && scmCount > 0 ? scmCount : null;
     return (
       <button
         key={panel.id}
         type="button"
         className={`rail__item ${isActive ? 'is-active' : ''}`}
         onClick={() => setActiveActivity(panel.id)}
-        aria-label={panel.title}
+        aria-label={badge ? `${panel.title} (${badge} changes)` : panel.title}
         aria-current={isActive ? 'page' : undefined}
         tabIndex={0}
       >
         <Icon size={17} strokeWidth={1.6} />
+        {badge !== null && (
+          <span className="rail__badge">{badge > 99 ? '99+' : badge}</span>
+        )}
         <span className="rail__tooltip">{panel.title}</span>
       </button>
     );
