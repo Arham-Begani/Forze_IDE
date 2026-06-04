@@ -26,6 +26,26 @@ export function readFile(path: string): Promise<string> {
   return invokeCommand<string>('fs_read_file', { path });
 }
 
+/** One file in a local-folder deployment (see `fs_collect_deploy_files`). */
+export interface DeployFile {
+  /** Path relative to the workspace root, forward-slashed. */
+  file: string;
+  /** SHA1 hex digest Vercel keys the upload by. */
+  sha: string;
+  size: number;
+  /** Raw file bytes, base64-encoded. */
+  data: string;
+}
+
+/**
+ * Walk the workspace folder and return every deployable file with its bytes,
+ * skipping node_modules / build output / VCS / secrets. Backs "Deploy This
+ * Folder" on the Deployments page.
+ */
+export function collectDeployFiles(root: string): Promise<DeployFile[]> {
+  return invokeCommand<DeployFile[]>('fs_collect_deploy_files', { root });
+}
+
 export function writeFile(path: string, contents: string): Promise<void> {
   return invokeCommand<void>('fs_write_file', { payload: { path, contents } });
 }
