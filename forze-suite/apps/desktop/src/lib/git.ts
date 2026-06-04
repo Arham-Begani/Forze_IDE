@@ -53,6 +53,15 @@ export function diffFile(
   return invokeCommand<string>('git_diff_file', { cwd, path, staged });
 }
 
+/**
+ * The committed (HEAD) contents of a repo-relative file — the baseline for the
+ * editor's live change gutter. Resolves to '' for files not in HEAD (new files)
+ * so the whole buffer shows as added.
+ */
+export function fileHead(cwd: string, path: string): Promise<string> {
+  return invokeCommand<string>('git_file_head', { cwd, path });
+}
+
 export function describeStatus(entry: GitStatusEntry): string {
   if (entry.untracked) return 'Untracked';
   const labels: Record<string, string> = {
