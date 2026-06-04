@@ -1,5 +1,7 @@
 import { GripVertical, PanelRight, X } from 'lucide-react';
+import { Suspense } from 'react';
 import ErrorBoundary from './ErrorBoundary';
+import PanelFallback from './PanelFallback';
 import { PANELS } from '../workbench/panels';
 import { isDockable, useWorkbench, type ActivityId } from '../workbench/store';
 
@@ -86,13 +88,15 @@ export default function Sidebar({ side, panelId, onInsertCode }: SidebarProps): 
       </div>
       <div className="dockhost__body">
         <ErrorBoundary scope={panel.title}>
-          {panel.group === 'skill' ? (
-            panel.render({ onInsertCode: onInsertCode ?? (() => undefined) })
-          ) : (
-            <div className="dockhost__scroll">
-              {panel.render({ onInsertCode: onInsertCode ?? (() => undefined) })}
-            </div>
-          )}
+          <Suspense fallback={<PanelFallback />}>
+            {panel.group === 'skill' ? (
+              panel.render({ onInsertCode: onInsertCode ?? (() => undefined) })
+            ) : (
+              <div className="dockhost__scroll">
+                {panel.render({ onInsertCode: onInsertCode ?? (() => undefined) })}
+              </div>
+            )}
+          </Suspense>
         </ErrorBoundary>
       </div>
     </div>
