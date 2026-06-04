@@ -23,14 +23,16 @@ export interface AgentDef {
   blurb: string;
 }
 
-/** The four agents a user can spin up. Commands are typed into a real shell, so
- *  if a CLI isn't installed the user just sees the shell's "not found" error and
- *  keeps a working prompt — no special-casing required. */
+/** The four agents a user can spin up. Each `command` is launched as the
+ *  spawned shell's startup command (see `pty_spawn` + `VibeTerminal`), so the
+ *  CLI boots deterministically. If a CLI isn't installed the shell just prints
+ *  its "not found" error and (thanks to -NoExit) leaves a working prompt — no
+ *  special-casing required. */
 export const AGENTS: AgentDef[] = [
-  { id: 'claude', label: 'Claude Code', command: 'claude', color: '#d97757', blurb: "Anthropic's agentic coding CLI" },
-  { id: 'codex', label: 'Codex', command: 'codex', color: '#10a37f', blurb: "OpenAI's Codex CLI" },
-  { id: 'antigravity', label: 'Antigravity CLI', command: 'antigravity', color: '#6366f1', blurb: "Google's Antigravity agent CLI" },
-  { id: 'opencode', label: 'OpenCode', command: 'opencode', color: '#eab308', blurb: 'Open-source terminal coding agent' },
+  { id: 'claude', label: 'Claude Code', command: 'claude', color: '#e5e5e5', blurb: "Anthropic's agentic coding CLI" },
+  { id: 'codex', label: 'Codex', command: 'codex', color: '#00d4ff', blurb: "OpenAI's Codex CLI" },
+  { id: 'antigravity', label: 'Antigravity CLI', command: 'agy', color: '#74ecff', blurb: "Google's Antigravity agent CLI" },
+  { id: 'opencode', label: 'OpenCode', command: 'opencode', color: '#a3a3a3', blurb: 'Open-source terminal coding agent' },
 ];
 
 export function agentDef(id: AgentId): AgentDef {
