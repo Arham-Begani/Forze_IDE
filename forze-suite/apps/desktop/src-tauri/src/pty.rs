@@ -64,6 +64,30 @@ fn which_on_path(exe: &str) -> Option<String> {
     None
 }
 
+/// Append the args that make `shell` boot straight into `launch` while staying
+/// interactive afterwards. Used by the Vibe Stations grid so a CLI coding agent
+/// (claude/codex/agy/opencode) launches deterministically the instant the shell
+/// starts — no fragile "type the command after N ms" race that loses keystrokes
+/// when a cold shell isn't at its prompt yet.
+fn append_launch_args(cmd: &mut CommandBuilder, shell: &str, launch: &str) {
+    let lower = shell.to_ascii_lowercase();
+    if lower.contains("powershell") || lower.contains("pwsh") {
+        // -NoExit: run the CLI, then drop to an interactive prompt afterwards.
+        cmd.arg("-NoExit");
+        cmd.arg("-Command");
+        cmd.arg(launch);
+    } else if lower.contains("cmd") {
+        // cmd.exe: /k runs the command and keeps the prompt open.
+        cmd.arg("/k");
+        cmd.arg(launch);
+    } else {
+        // POSIX shells: run the CLI, then replace the process with a fresh
+        // interactive shell so the user keeps a usable prompt when it exits.
+        cmd.arg("-c");
+        cmd.arg(format!("{launch}; exec \"{shell}\" -i"));
+    }
+}
+
 #[command]
 pub fn pty_spawn(
     app: AppHandle,
@@ -72,6 +96,7 @@ pub fn pty_spawn(
     cwd: Option<String>,
     cols: Option<u16>,
     rows: Option<u16>,
+    launch_command: Option<String>,
 ) -> Result<String, String> {
     let pty_system = native_pty_system();
     // Clamp to a sane minimum — xterm-fit can briefly report 0 on the very
@@ -103,6 +128,14 @@ pub fn pty_spawn(
         });
     if let Some(dir) = resolved_cwd.as_ref() {
         cmd.cwd(dir);
+    }
+
+    if let Some(launch) = launch_command
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        append_launch_args(&mut cmd, &shell_cmd, launch);
     }
 
     let child = pair
