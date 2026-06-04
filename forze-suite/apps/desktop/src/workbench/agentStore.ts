@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Message } from '@forze/agents';
+import { debouncedJSONStorage } from './debouncedStorage';
 
 export interface AgentThread {
   id: string;
@@ -137,6 +138,7 @@ export const useAgents = create<AgentState>()(
     }),
     {
       name: 'forze.agents.v1',
+      storage: debouncedJSONStorage(),
       partialize: (state) => ({
         threads: state.threads,
         activeThreadId: state.activeThreadId,
