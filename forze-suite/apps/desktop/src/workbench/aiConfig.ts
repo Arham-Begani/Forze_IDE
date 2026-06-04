@@ -30,12 +30,8 @@ export const PROVIDERS: Provider[] = [
 /** The general model users get with zero setup. */
 export const DEFAULT_PROVIDER_ID = GeminiProvider.id;
 
-/**
- * Default model for fresh threads. Flash is fast and cheap — the right default
- * for a shared built-in key and for general-purpose chat. Users can switch to
- * Pro (or any Claude model) per thread.
- */
-export const DEFAULT_MODEL = 'gemini-2.5-flash';
+/** The only built-in Gemini model: Gemini 3.1 Pro (Preview). */
+export const DEFAULT_MODEL = 'gemini-3.1-pro-preview';
 
 /** Build-time built-in key. Empty string when not configured. */
 const BUILTIN_GEMINI_KEY = (
