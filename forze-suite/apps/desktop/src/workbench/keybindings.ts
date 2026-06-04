@@ -28,6 +28,7 @@ const DEFAULT_BINDINGS: Binding[] = [
   { combo: 'ctrl+shift+a', commandId: 'workbench.view.agents' },
   { combo: 'ctrl+s', commandId: 'workbench.action.files.save' },
   { combo: 'ctrl+w', commandId: 'workbench.action.closeActiveEditor' },
+  { combo: 'shift+alt+f', commandId: 'editor.action.formatDocument' },
 ];
 
 function comboFromEvent(event: KeyboardEvent): string {
@@ -64,6 +65,7 @@ export function useKeybindings(): void {
         'ctrl+j',
         'ctrl+`',
         'ctrl+shift+`',
+        'shift+alt+f', // Format Document must fire from inside the editor.
       ]);
       if (!swallowAlways.has(combo) && isInEditable && combo !== 'ctrl+s') return;
       event.preventDefault();
