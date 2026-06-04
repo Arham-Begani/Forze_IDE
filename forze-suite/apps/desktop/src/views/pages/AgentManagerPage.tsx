@@ -22,13 +22,14 @@ import {
   Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ROLE_LIST,
   ROLES,
   planMission,
   runAgent,
   runPool,
+  synthesizeMission,
   type AgentRoleId,
 } from '../../lib/orchestrator';
 import { activeProvider } from '../../lib/ai';
@@ -38,7 +39,11 @@ import {
   type ManagedAgent,
 } from '../../workbench/agentManagerStore';
 import { useWorkbench } from '../../workbench/store';
+import { useProject } from '../../workbench/projectStore';
+import { basename } from '../../lib/fs';
+import { FolderOpen } from 'lucide-react';
 import { toast } from '../../shell/toast';
+import MissionGraph from './MissionGraph';
 
 const ROLE_ICONS: Record<AgentRoleId, LucideIcon> = {
   architect: Network,
@@ -84,6 +89,7 @@ export default function AgentManagerPage(): JSX.Element {
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
 
   const provider = activeProvider();
+  const workspaceRoot = useProject((s) => s.workspaceRoot);
   const [goal, setGoal] = useState('');
   const [model, setModel] = useState<string>(() => provider?.models[0]?.id ?? '');
   const [planning, setPlanning] = useState(false);
@@ -111,7 +117,7 @@ export default function AgentManagerPage(): JSX.Element {
   // ---- Engine wiring -------------------------------------------------------
 
   const runOne = useCallback(
-    async (agentId: string, followUp?: string) => {
+    async (agentId: string, followUp?: string, missionBrief?: string) => {
       const current = useAgentManager.getState().agents.find((a) => a.id === agentId);
       if (!current) return;
 
@@ -127,19 +133,32 @@ export default function AgentManagerPage(): JSX.Element {
       setAgentStatus(agentId, 'thinking');
 
       try {
-        await runAgent(
+        // We stream output via onDelta, but also keep the returned summary: some
+        // providers can finish with no streamed text (empty/blocked candidates),
+        // which would otherwise leave a "done" agent with an empty panel.
+        const summary = await runAgent(
           {
             role: current.roleId,
             task: current.task,
             model: current.model ?? activeModel,
             priorOutput: followUp ? priorOutput : undefined,
             followUp,
+            missionBrief,
           },
           {
             signal: controller.signal,
             onDelta: (delta) => appendAgentOutput(agentId, delta),
           },
         );
+        const streamed = useAgentManager.getState().agents.find((a) => a.id === agentId)?.output ?? '';
+        if (!streamed.trim()) {
+          appendAgentOutput(
+            agentId,
+            summary.trim() ||
+              '_The model returned an empty response — it may have been rate-limited or ' +
+                'filtered. Try **Re-run**, rephrase the task, or switch models._',
+          );
+        }
         setAgentStatus(agentId, 'done');
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
@@ -170,6 +189,17 @@ export default function AgentManagerPage(): JSX.Element {
       const plan = await planMission(trimmed, { model: activeModel });
       updateMission(missionId, { summary: plan.summary, status: 'running' });
 
+      // Shared brief so each worker knows the whole mission and stays in its lane
+      // instead of duplicating or contradicting its siblings.
+      const brief =
+        `Overall goal: ${trimmed}\n` +
+        `Architect's plan: ${plan.summary}\n` +
+        `The full team and their tasks:\n` +
+        plan.tasks
+          .map((t, i) => `  ${i + 1}. [${ROLES[t.role].label}] ${t.title}`)
+          .join('\n') +
+        `\nDo only your assigned task; trust your teammates to handle theirs.`;
+
       const ids = plan.tasks.map((task) =>
         spawnAgent({
           roleId: task.role,
@@ -184,8 +214,29 @@ export default function AgentManagerPage(): JSX.Element {
       setActiveAgent(ids[0] ?? null);
       setPlanning(false);
 
-      await runPool(ids, 3, (id) => runOne(id));
-      updateMission(missionId, { status: 'done' });
+      await runPool(ids, 3, (id) => runOne(id, undefined, brief));
+
+      // Orchestration close-out: the Architect consolidates every agent's output
+      // into one mission report rather than leaving disconnected answers behind.
+      try {
+        const finished = useAgentManager
+          .getState()
+          .agents.filter((a) => ids.includes(a.id));
+        const report = await synthesizeMission(
+          trimmed,
+          plan.summary,
+          finished.map((a) => ({
+            title: a.title,
+            role: a.roleId,
+            status: a.status,
+            output: a.output,
+          })),
+          { model: activeModel },
+        );
+        updateMission(missionId, { status: 'done', report });
+      } catch {
+        updateMission(missionId, { status: 'done' });
+      }
       toast(`Mission complete — ${ids.length} agents finished.`, 'success');
     } catch (err) {
       setPlanning(false);
@@ -246,10 +297,19 @@ export default function AgentManagerPage(): JSX.Element {
           </h1>
           <p className="apppage__subtitle">
             Describe what you want to ship. The Architect plans it and delegates to a
-            team of specialist agents that work in parallel.
+            team of specialist agents that read, edit, and verify your project in parallel.
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {workspaceRoot ? (
+            <span className="pill" title={`Agents act on ${workspaceRoot}`}>
+              <FolderOpen size={11} /> {basename(workspaceRoot)}
+            </span>
+          ) : (
+            <span className="pill pill--warn" title="No project open — agents run in advisory mode">
+              <FolderOpen size={11} /> No project · advisory
+            </span>
+          )}
           {provider ? (
             <span className="pill pill--accent" title="Active model">
               <Cpu size={11} /> {provider.label}
@@ -341,6 +401,34 @@ export default function AgentManagerPage(): JSX.Element {
             <StatCard label="Working" value={String(stats.working)} icon={Zap} live={stats.working > 0} />
             <StatCard label="Completed" value={String(stats.done)} icon={CircleDot} />
             <StatCard label="Tokens" value={formatTokens(stats.tokens)} icon={Cpu} />
+          </div>
+        )}
+
+        {/* === Live orchestration graph (appears the moment a mission runs) === */}
+        {agents.length > 0 && (
+          <MissionGraph agents={agents} activeAgentId={activeAgentId} onSelect={setActiveAgent} />
+        )}
+
+        {/* === Architect briefing + consolidated report === */}
+        {missions[0] && (missions[0].summary || missions[0].report) && (
+          <div className="appcard agentmgr__briefing">
+            <h3 className="appcard__title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Network size={15} /> Architect briefing
+            </h3>
+            {missions[0].summary && <p className="agentmgr__brief-text">{missions[0].summary}</p>}
+            {missions[0].report ? (
+              <div className="agentmgr__report">
+                <span className="kpi__label">Mission report</span>
+                <pre>{missions[0].report}</pre>
+              </div>
+            ) : (
+              busy && (
+                <span className="agentmgr__brief-pending">
+                  <span className="agentmgr__spinner" /> Agents working — the Architect will
+                  consolidate a report when they finish.
+                </span>
+              )
+            )}
           </div>
         )}
 
@@ -452,8 +540,8 @@ function StatCard({
             width: 32,
             height: 32,
             borderRadius: 8,
-            background: 'rgba(99, 102, 241, 0.08)',
-            border: '1px solid rgba(99, 102, 241, 0.15)',
+            background: 'rgba(0, 212, 255, 0.08)',
+            border: '1px solid rgba(0, 212, 255, 0.18)',
             color: 'var(--color-accent-bright)',
           }}
         >
@@ -620,6 +708,15 @@ function AgentDetail({
   const [followUp, setFollowUp] = useState('');
   const working = agent.status === 'thinking' || agent.status === 'queued';
 
+  // Esc closes the panel — expected for a slide-over drawer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const send = () => {
     const text = followUp.trim();
     if (!text || working) return;
@@ -649,8 +746,14 @@ function AgentDetail({
             <RotateCcw size={14} />
           </button>
         )}
-        <button type="button" className="agentmgr__icon-btn" onClick={onClose} title="Close">
-          <X size={14} />
+        <button
+          type="button"
+          className="agentmgr__icon-btn agentmgr__close"
+          onClick={onClose}
+          title="Close panel (Esc)"
+          aria-label="Close panel"
+        >
+          <X size={16} strokeWidth={2.4} />
         </button>
       </div>
 
