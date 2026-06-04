@@ -1,7 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
-  Bot,
   Boxes,
   Files,
   GitBranch,
@@ -16,26 +15,31 @@ import {
   SquareTerminal,
   Users,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { lazy, type ReactNode } from 'react';
 import type { ActivityId } from './store';
 
+// Explorer is the default boot panel, so keep it eager — everything else is
+// code-split via React.lazy. This keeps the heavy modules (xterm terminals in
+// Vibe Stations, the AI/orchestrator stack behind Agent Manager, the charts in
+// Dashboard/Analytics, highlight.js) out of the startup bundle, so the app
+// paints the workspace immediately instead of evaluating all 16 views first.
+// The render sites (Sidebar, EditorArea) wrap output in <Suspense>.
 import ExplorerView from '../views/ExplorerView';
-import SearchView from '../views/SearchView';
-import SourceControlView from '../views/SourceControlView';
-import AgentView from '../views/AgentView';
-import SocialView from '../views/SocialView';
-import VibeCanvas from '../views/VibeCanvas';
-import SecurityAuditor from '../views/SecurityAuditor';
-import SettingsView from '../views/SettingsView';
+const SearchView = lazy(() => import('../views/SearchView'));
+const SourceControlView = lazy(() => import('../views/SourceControlView'));
+const SocialView = lazy(() => import('../views/SocialView'));
+const VibeCanvas = lazy(() => import('../views/VibeCanvas'));
+const SecurityAuditor = lazy(() => import('../views/SecurityAuditor'));
+const SettingsView = lazy(() => import('../views/SettingsView'));
 
-import AgentManagerPage from '../views/pages/AgentManagerPage';
-import DashboardPage from '../views/pages/DashboardPage';
-import AnalyticsPage from '../views/pages/AnalyticsPage';
-import DeploymentsPage from '../views/pages/DeploymentsPage';
-import AdStudioPage from '../views/pages/AdStudioPage';
-import VibeStationsPage from '../views/pages/VibeStationsPage';
-import CommunityPage from '../views/pages/CommunityPage';
-import TeamPage from '../views/pages/TeamPage';
+const AgentManagerPage = lazy(() => import('../views/pages/AgentManagerPage'));
+const DashboardPage = lazy(() => import('../views/pages/DashboardPage'));
+const AnalyticsPage = lazy(() => import('../views/pages/AnalyticsPage'));
+const DeploymentsPage = lazy(() => import('../views/pages/DeploymentsPage'));
+const AdStudioPage = lazy(() => import('../views/pages/AdStudioPage'));
+const VibeStationsPage = lazy(() => import('../views/pages/VibeStationsPage'));
+const CommunityPage = lazy(() => import('../views/pages/CommunityPage'));
+const TeamPage = lazy(() => import('../views/pages/TeamPage'));
 
 export interface PanelContext {
   onInsertCode: (snippet: string) => void;
@@ -53,7 +57,6 @@ export const PANELS: Record<ActivityId, PanelDef> = {
   explorer: { id: 'explorer', title: 'Explorer', icon: Files, group: 'core', render: () => <ExplorerView /> },
   search: { id: 'search', title: 'Search', icon: Search, group: 'core', render: () => <SearchView /> },
   'source-control': { id: 'source-control', title: 'Source Control', icon: GitBranch, group: 'core', render: () => <SourceControlView /> },
-  agents: { id: 'agents', title: 'Agents', icon: Bot, group: 'core', render: () => <AgentView /> },
   social: { id: 'social', title: 'Social', icon: Megaphone, group: 'core', render: () => <SocialView /> },
   vibe: { id: 'vibe', title: 'Vibe Canvas', icon: Sparkles, group: 'core', render: (ctx) => <VibeCanvas onInsertCode={ctx.onInsertCode} /> },
   security: { id: 'security', title: 'Security', icon: ShieldCheck, group: 'core', render: () => <SecurityAuditor /> },
