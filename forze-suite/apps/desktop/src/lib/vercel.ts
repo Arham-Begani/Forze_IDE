@@ -45,6 +45,12 @@ export interface VercelDeployment {
   target: 'production' | 'staging' | null;
   branch?: string;
   commitMessage?: string;
+  /** Vercel dashboard URL for build logs / inspector. */
+  inspectorUrl?: string;
+}
+
+export function isInProgress(state: DeployState): boolean {
+  return state === 'BUILDING' || state === 'QUEUED' || state === 'INITIALIZING';
 }
 
 export interface VercelEnvVar {
@@ -115,6 +121,7 @@ export async function listDeployments(
     readyState?: DeployState;
     created: number;
     target: 'production' | 'staging' | null;
+    inspectorUrl?: string;
     meta?: {
       githubCommitRef?: string;
       gitlabCommitRef?: string;
@@ -135,6 +142,7 @@ export async function listDeployments(
     state: d.state ?? d.readyState ?? 'QUEUED',
     created: d.created,
     target: d.target,
+    inspectorUrl: d.inspectorUrl,
     branch:
       d.meta?.githubCommitRef ?? d.meta?.gitlabCommitRef ?? d.meta?.bitbucketCommitRef,
     commitMessage:
@@ -142,6 +150,51 @@ export async function listDeployments(
       d.meta?.gitlabCommitMessage ??
       d.meta?.bitbucketCommitMessage,
   }));
+}
+
+/** Fetch a single deployment's current state (for polling a build to done). */
+export async function getDeployment(
+  token: string,
+  id: string,
+  teamId?: string,
+): Promise<{ state: DeployState; url: string }> {
+  const d = await call<{
+    readyState?: DeployState;
+    status?: DeployState;
+    url: string;
+  }>(token, `/v13/deployments/${encodeURIComponent(id)}${teamQuery(teamId)}`);
+  return { state: (d.status ?? d.readyState ?? 'QUEUED') as DeployState, url: d.url };
+}
+
+/**
+ * Fetch a deployment's build logs as plain text (stdout/stderr/command lines).
+ * Used to diagnose a failed build for the auto-fix loop.
+ */
+export async function getDeploymentLogs(
+  token: string,
+  id: string,
+  teamId?: string,
+): Promise<string> {
+  const sep = teamId ? '&' : '?';
+  interface Event {
+    type?: string;
+    text?: string;
+    payload?: { text?: string } | string;
+  }
+  const events = await call<Event[] | { events?: Event[] }>(
+    token,
+    `/v3/deployments/${encodeURIComponent(id)}/events${teamQuery(teamId)}${sep}limit=1000`,
+  );
+  const list = Array.isArray(events) ? events : events.events ?? [];
+  const lines: string[] = [];
+  for (const e of list) {
+    const text =
+      e.text ??
+      (typeof e.payload === 'string' ? e.payload : e.payload?.text) ??
+      '';
+    if (text) lines.push(text.replace(/\n$/, ''));
+  }
+  return lines.join('\n');
 }
 
 export async function listEnv(
@@ -192,4 +245,144 @@ export async function createGitDeployment(
     { method: 'POST', body: JSON.stringify(body) },
   );
   return { id: data.id, url: data.url };
+}
+
+/**
+ * Re-run an existing deployment with the exact same source. Vercel resolves the
+ * git source / files from the referenced deployment, so this works for both
+ * git-linked and CLI deployments.
+ */
+export async function redeployDeployment(
+  token: string,
+  opts: {
+    deployment: VercelDeployment;
+    target?: 'production' | 'staging';
+    teamId?: string;
+  },
+): Promise<{ id: string; url: string }> {
+  const body = {
+    name: opts.deployment.name,
+    deploymentId: opts.deployment.uid,
+    target: opts.target ?? opts.deployment.target ?? undefined,
+    meta: { action: 'redeploy' },
+  };
+  const data = await call<{ id: string; url: string }>(
+    token,
+    `/v13/deployments${teamQuery(opts.teamId)}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  return { id: data.id, url: data.url };
+}
+
+/** Decode a base64 string (file bytes from `collectDeployFiles`) to bytes. */
+export function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Upload one file's bytes to Vercel's content-addressed store. Vercel keys it
+ * by the SHA1 digest, so re-uploading an identical file is a cheap no-op. This
+ * must precede the file-based deployment that references the same SHAs.
+ */
+export async function uploadFile(
+  token: string,
+  bytes: Uint8Array,
+  sha: string,
+  teamId?: string,
+): Promise<void> {
+  if (!token) throw new Error('Add a Vercel token in Settings → Integrations.');
+  const res = await httpFetch(`${API}/v2/files${teamQuery(teamId)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/octet-stream',
+      'x-vercel-digest': sha,
+    },
+    // Uint8Array is a valid fetch body; cast around the DOM lib's generic
+    // ArrayBufferView typing mismatch.
+    body: bytes as unknown as BodyInit,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let message = text || res.statusText;
+    try {
+      message = JSON.parse(text)?.error?.message ?? message;
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(`Vercel upload ${res.status}: ${message}`);
+  }
+}
+
+export interface DeployManifestFile {
+  /** Path relative to the deployment root (forward slashes). */
+  file: string;
+  sha: string;
+  size: number;
+}
+
+/**
+ * Create a deployment straight from local files (the `vercel deploy` flow) —
+ * no git connection required. Vercel finds or creates a project by `name`,
+ * builds the uploaded source, and returns the new deployment. All referenced
+ * SHAs must already be uploaded via {@link uploadFile}.
+ */
+export async function createFileDeployment(
+  token: string,
+  opts: {
+    name: string;
+    files: DeployManifestFile[];
+    target?: 'production';
+    framework?: string | null;
+    teamId?: string;
+  },
+): Promise<{ id: string; url: string }> {
+  const body: Record<string, unknown> = {
+    name: opts.name,
+    files: opts.files,
+    projectSettings: { framework: opts.framework ?? null },
+  };
+  if (opts.target) body.target = opts.target;
+  const data = await call<{ id: string; url: string }>(
+    token,
+    `/v13/deployments${teamQuery(opts.teamId)}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  return { id: data.id, url: data.url };
+}
+
+/** Cancel an in-progress deployment (BUILDING / QUEUED / INITIALIZING). */
+export async function cancelDeployment(
+  token: string,
+  deploymentId: string,
+  teamId?: string,
+): Promise<void> {
+  await call(
+    token,
+    `/v12/deployments/${encodeURIComponent(deploymentId)}/cancel${teamQuery(teamId)}`,
+    { method: 'PATCH' },
+  );
+}
+
+/**
+ * Promote a finished deployment to be the current production deployment
+ * (instant rollback / roll-forward). Requires the deployment to belong to the
+ * given project.
+ */
+export async function promoteDeployment(
+  token: string,
+  projectId: string,
+  deploymentId: string,
+  teamId?: string,
+): Promise<void> {
+  await call(
+    token,
+    `/v10/projects/${encodeURIComponent(projectId)}/promote/${encodeURIComponent(
+      deploymentId,
+    )}${teamQuery(teamId)}`,
+    { method: 'POST' },
+  );
 }
