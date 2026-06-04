@@ -1,0 +1,11 @@
+# Cap parallel compiler jobs. Cargo defaults to one job per logical CPU (12
+# here), but each rustc compiling a large crate (windows, winapi, ring, rustls)
+# needs ~0.5-1.5 GB. On a 7.7 GB machine, 12 in parallel overcommits RAM: the
+# box swaps to the page file (slow builds) and rustc processes abort under
+# memory pressure with STATUS_STACK_BUFFER_OVERRUN, leaving corrupt artifacts
+# that cascade into "can't find crate" errors. Capping at 4 keeps peak memory
+# in RAM — the build both completes reliably and finishes faster (no thrashing).
+#
+# Bump this on a machine with more RAM (rule of thumb: ~1.5 GB headroom per job).
+[build]
+jobs = 4
