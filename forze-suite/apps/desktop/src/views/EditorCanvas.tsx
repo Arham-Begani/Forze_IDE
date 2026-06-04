@@ -7,6 +7,9 @@ import {
   useState,
 } from 'react';
 import { highlight } from '../lib/highlight';
+import { formatCode } from '../lib/format';
+import { computeLineDiff } from '../lib/lineDiff';
+import { toast } from '../shell/toast';
 import type { StackTraceLine } from '@forze/shared/diagnostics';
 
 export interface EditorHandle {
@@ -16,12 +19,20 @@ export interface EditorHandle {
   getValue: () => string;
   /** Scroll to and select a 1-based line (used by Search results). */
   revealLine: (line: number) => void;
+  /** Reformat the whole buffer (Format Document). Resolves when done. */
+  format: () => Promise<void>;
 }
 
 interface EditorCanvasProps {
   initialValue?: string;
   language?: string;
   onChange?: (value: string) => void;
+  /**
+   * Committed (HEAD) contents of this file. When provided, the gutter shows
+   * VS Code-style change bars (added / modified / deleted) computed live against
+   * the current buffer. Omit (or pass null) for files with no git baseline.
+   */
+  diffBaseline?: string | null;
 }
 
 /**
@@ -32,7 +43,10 @@ interface EditorCanvasProps {
  * file contents, works offline, and keeps the editor lightweight.
  */
 const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
-  function EditorCanvas({ initialValue = '', language = 'typescript', onChange }, ref) {
+  function EditorCanvas(
+    { initialValue = '', language = 'typescript', onChange, diffBaseline = null },
+    ref,
+  ) {
     const [value, setValue] = useState(initialValue);
     const [errorLines, setErrorLines] = useState<Set<number>>(() => new Set());
     const taRef = useRef<HTMLTextAreaElement | null>(null);
@@ -48,6 +62,10 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
 
     const lineCount = useMemo(() => value.split('\n').length, [value]);
     const highlighted = useMemo(() => highlight(value, language), [value, language]);
+    const diff = useMemo(
+      () => (diffBaseline == null ? null : computeLineDiff(diffBaseline, value)),
+      [diffBaseline, value],
+    );
 
     const syncScroll = (): void => {
       const ta = taRef.current;
@@ -94,6 +112,42 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
           });
         },
         clearDiagnostics: () => setErrorLines(new Set()),
+        format: async () => {
+          const ta = taRef.current;
+          const source = ta?.value ?? value;
+          // Remember which line the caret sits on so we can restore the caret
+          // near it after the buffer is rewritten (offsets shift wholesale).
+          const caretLine = ta
+            ? source.slice(0, ta.selectionStart).split('\n').length
+            : 1;
+          let result;
+          try {
+            result = await formatCode(source, language);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            // Prettier's first message line is the human-readable syntax error.
+            toast(`Can't format: ${message.split('\n')[0]}`, 'error');
+            return;
+          }
+          if (!result.changed) {
+            toast('Already formatted', 'info');
+            return;
+          }
+          update(result.code);
+          requestAnimationFrame(() => {
+            if (!ta) return;
+            ta.focus();
+            const lines = result.code.split('\n');
+            const target = Math.max(1, Math.min(caretLine, lines.length));
+            let offset = 0;
+            for (let i = 0; i < target - 1; i++) offset += lines[i]!.length + 1;
+            ta.setSelectionRange(offset, offset);
+          });
+          toast(
+            result.engine === 'prettier' ? 'Formatted with Prettier' : 'Tidied whitespace',
+            'success',
+          );
+        },
         revealLine: (line: number) => {
           const ta = taRef.current;
           if (!ta) return;
@@ -140,14 +194,24 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
       <div className="codeedit">
         <div className="codeedit__gutter" aria-hidden>
           <div className="codeedit__gutter-inner" ref={gutterRef}>
-            {Array.from({ length: lineCount }, (_, i) => (
-              <div
-                key={i}
-                className={`codeedit__num${errorLines.has(i + 1) ? ' is-error' : ''}`}
-              >
-                {i + 1}
-              </div>
-            ))}
+            {Array.from({ length: lineCount }, (_, i) => {
+              const change = diff
+                ? diff.added.has(i)
+                  ? ' is-added'
+                  : diff.modified.has(i)
+                    ? ' is-modified'
+                    : ''
+                : '';
+              const delMark = diff?.deleted.has(i) ? ' is-deleted' : '';
+              return (
+                <div
+                  key={i}
+                  className={`codeedit__num${errorLines.has(i + 1) ? ' is-error' : ''}${change}${delMark}`}
+                >
+                  {i + 1}
+                </div>
+              );
+            })}
           </div>
         </div>
         <div className="codeedit__main">
