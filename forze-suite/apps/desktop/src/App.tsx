@@ -9,6 +9,7 @@ import TopBar from './shell/TopBar';
 import CommandBar from './shell/CommandBar';
 import CommandPalette from './shell/CommandPalette';
 import QuickOpen from './shell/QuickOpen';
+import FloatingAssistant from './shell/FloatingAssistant';
 import OnboardingWizard, { useOnboarding } from './shell/OnboardingWizard';
 import ErrorBoundary from './shell/ErrorBoundary';
 import { ToastHost } from './shell/toast';
@@ -220,6 +221,17 @@ export default function App(): JSX.Element {
         },
       }),
       commands.register({
+        id: 'editor.action.formatDocument',
+        title: 'Format Document',
+        category: 'Editor',
+        keybinding: keybindingHint('editor.action.formatDocument'),
+        run: async () => {
+          const editor = activeEditorRef.current;
+          if (!editor) return;
+          await editor.format();
+        },
+      }),
+      commands.register({
         id: 'workbench.action.files.openFolder',
         title: 'Open Folder…',
         category: 'File',
@@ -263,6 +275,13 @@ export default function App(): JSX.Element {
         run: () => useWorkbench.getState().openPage('agent-manager'),
       }),
       commands.register({
+        id: 'workbench.assistant.toggle',
+        title: 'Toggle Forze Assistant',
+        category: 'Forze',
+        keybinding: keybindingHint('workbench.view.agents'),
+        run: () => useWorkbench.getState().toggleAssistant(),
+      }),
+      commands.register({
         id: 'workbench.action.mcp.copyConfig',
         title: 'Copy MCP Config for External Agents',
         category: 'Forze',
@@ -300,7 +319,6 @@ export default function App(): JSX.Element {
         title: 'Show Source Control',
         keybindingId: 'workbench.view.scm',
       },
-      { id: 'agents', title: 'Show Agents', keybindingId: 'workbench.view.agents' },
       { id: 'social', title: 'Show Social', keybindingId: 'workbench.view.social' },
       { id: 'vibe', title: 'Show Vibe Canvas', keybindingId: 'workbench.view.vibe' },
       {
@@ -483,6 +501,7 @@ export default function App(): JSX.Element {
       </div>
       <CommandPalette />
       <QuickOpen />
+      <FloatingAssistant />
       <OnboardingWizard />
       <ToastHost />
     </>
