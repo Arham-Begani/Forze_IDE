@@ -9,6 +9,9 @@ import {
   resolveApiKey,
 } from '../workbench/aiConfig';
 
+/** Gemini's image-generation model ("Nano Banana"), reachable on the same key. */
+const IMAGE_MODEL = 'gemini-2.5-flash-image';
+
 export interface GenerateTextOptions {
   /** System / role instruction. */
   system?: string;
@@ -91,4 +94,68 @@ export async function generateText(
   options: GenerateTextOptions = {},
 ): Promise<string> {
   return streamConversation([userMsg(prompt)], options);
+}
+
+export interface GeneratedImage {
+  /** Ready-to-render `data:<mime>;base64,…` URL. */
+  dataUrl: string;
+  mimeType: string;
+}
+
+/**
+ * Text-to-image generation. Image synthesis is Gemini-only, so this always
+ * resolves the Gemini key (the user's own, else the built-in one) regardless of
+ * which provider chat is pointed at. Returns a data URL ready to drop into an
+ * `<img src>`. Throws a friendly error when no Gemini key is available or the
+ * model returns no image part.
+ */
+export async function generateImage(
+  prompt: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<GeneratedImage> {
+  const keys = useAgents.getState().apiKeys;
+  const apiKey = resolveApiKey(DEFAULT_PROVIDER_ID, keys);
+  if (!apiKey) {
+    throw new Error(
+      'Image generation needs a Gemini key. Add one in Settings → Agent providers.',
+    );
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${encodeURIComponent(
+    apiKey,
+  )}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ['IMAGE'] },
+    }),
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Image generation failed (${response.status}): ${text || response.statusText}`);
+  }
+
+  const json = (await response.json()) as {
+    candidates?: Array<{
+      content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> };
+    }>;
+    promptFeedback?: { blockReason?: string };
+  };
+
+  if (json.promptFeedback?.blockReason) {
+    throw new Error(`Image blocked by safety filter (${json.promptFeedback.blockReason}).`);
+  }
+
+  const parts = json.candidates?.[0]?.content?.parts ?? [];
+  const img = parts.find((p) => p.inlineData?.data)?.inlineData;
+  if (!img?.data) {
+    throw new Error('The model returned no image. Try a more descriptive prompt.');
+  }
+  const mimeType = img.mimeType || 'image/png';
+  return { dataUrl: `data:${mimeType};base64,${img.data}`, mimeType };
 }
