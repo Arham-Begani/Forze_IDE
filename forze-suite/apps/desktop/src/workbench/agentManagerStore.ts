@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AgentRoleId } from '../lib/orchestrator';
+import { debouncedJSONStorage } from './debouncedStorage';
+
+/** Keep persisted output bounded so a long stream can't exhaust the quota. */
+const MAX_PERSISTED_OUTPUT = 16_000;
 
 /**
  * State for the Agent Manager (Mission Control): the orchestrated team of
@@ -36,7 +40,10 @@ export interface ManagedAgent {
 export interface Mission {
   id: string;
   goal: string;
+  /** The Architect's up-front plan summary. */
   summary: string;
+  /** The Architect's consolidated report, produced after the workers finish. */
+  report?: string;
   status: 'planning' | 'running' | 'done' | 'error';
   createdAt: number;
 }
@@ -165,8 +172,15 @@ export const useAgentManager = create<AgentManagerState>()(
     }),
     {
       name: 'forze.agentManager.v1',
+      storage: debouncedJSONStorage(),
       partialize: (state) => ({
-        agents: state.agents,
+        // Cap each agent's output so a long stream can't exhaust the quota; the
+        // live, full output stays in memory — only the persisted copy is trimmed.
+        agents: state.agents.map((a) =>
+          a.output.length > MAX_PERSISTED_OUTPUT
+            ? { ...a, output: a.output.slice(-MAX_PERSISTED_OUTPUT) }
+            : a,
+        ),
         missions: state.missions,
         activeAgentId: state.activeAgentId,
       }),
