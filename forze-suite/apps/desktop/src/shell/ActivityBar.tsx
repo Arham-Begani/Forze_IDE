@@ -1,7 +1,7 @@
 import { LayoutGrid } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useWorkbench } from '../workbench/store';
-import { CORE_PANELS, SKILL_PANELS } from '../workbench/panels';
+import { BOARD_PANEL, CORE_PANELS, SKILL_PANELS } from '../workbench/panels';
 import { changeCount, useGitStatus, useGitStatusPolling } from '../workbench/gitStatusStore';
 
 export default function ActivityBar(): JSX.Element {
@@ -74,6 +74,19 @@ export default function ActivityBar(): JSX.Element {
           setLauncherOpen(false);
         }}
       />
+
+      {/* Shared team board — lives directly below the Apps launcher. */}
+      <button
+        type="button"
+        className={`rail__item ${activePageId === BOARD_PANEL.id ? 'is-active' : ''}`}
+        onClick={() => openPage(BOARD_PANEL.id)}
+        aria-label={BOARD_PANEL.title}
+        aria-current={activePageId === BOARD_PANEL.id ? 'page' : undefined}
+        tabIndex={0}
+      >
+        <BOARD_PANEL.icon size={17} strokeWidth={1.6} />
+        <span className="rail__tooltip">{BOARD_PANEL.title}</span>
+      </button>
 
       <div className="rail__spacer" />
       {settings && renderItem(settings)}
