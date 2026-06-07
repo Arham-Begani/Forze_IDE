@@ -1,7 +1,5 @@
-import { Search, Settings, SquareSplitHorizontal, X, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Settings, SquareSplitHorizontal, X, Plus } from 'lucide-react';
 import { useWorkbench } from '../workbench/store';
-import { commands } from '../workbench/commands';
 import { PANELS } from '../workbench/panels';
 import { iconForLanguage } from '../lib/fileIcons';
 
@@ -16,18 +14,6 @@ export default function TopBar({ onOpenSettings, onToggleSidebar }: TopBarProps)
   const setActiveTab = useWorkbench((s) => s.setActiveTab);
   const closeTab = useWorkbench((s) => s.closeTab);
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
-  const setQuickOpen = useWorkbench((s) => s.setQuickOpen);
-
-  const [query, setQuery] = useState('');
-
-  // A leading `>` switches the box into command mode (VS Code parity): it
-  // opens the command palette. Anything else is treated as a file query.
-  useEffect(() => {
-    if (query.startsWith('>')) {
-      commands.run('workbench.action.showCommands');
-      setQuery('');
-    }
-  }, [query]);
 
   return (
     <div className="topbar">
@@ -82,23 +68,6 @@ export default function TopBar({ onOpenSettings, onToggleSidebar }: TopBarProps)
         >
           <Plus size={14} strokeWidth={1.6} />
         </button>
-      </div>
-
-      <div className="topbar__search">
-        <Search size={12} strokeWidth={1.8} className="topbar__search-icon" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              setQuickOpen(true, query.trim());
-              setQuery('');
-            }
-            if (e.key === 'Escape') setQuery('');
-          }}
-          placeholder="Go to file…"
-          aria-label="Go to file"
-        />
       </div>
 
       <button
