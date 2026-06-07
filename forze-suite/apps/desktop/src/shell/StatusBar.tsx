@@ -4,6 +4,7 @@ import {
   GitBranch,
   House,
   Megaphone,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
@@ -16,10 +17,15 @@ interface StatusBarProps {
   survivalBand: 'critical' | 'shaky' | 'steady' | 'strong';
   problemsCount: number;
   scheduledPostsCount: number;
+  /** Findings from the most recent pre-commit security review. */
+  securityFindings: number;
+  /** True when at least one finding is a commit-blocking secret. */
+  securityBlocking: boolean;
   onOpenFolder: () => void;
   onShowProblems: () => void;
   onShowScore: () => void;
-  onShowSocial: () => void;
+  onShowSchedule: () => void;
+  onShowSecurity: () => void;
 }
 
 export default function StatusBar({
@@ -29,10 +35,13 @@ export default function StatusBar({
   survivalBand,
   problemsCount,
   scheduledPostsCount,
+  securityFindings,
+  securityBlocking,
   onOpenFolder,
   onShowProblems,
   onShowScore,
-  onShowSocial,
+  onShowSchedule,
+  onShowSecurity,
 }: StatusBarProps): JSX.Element {
   const folderName = workspaceRoot ? basename(workspaceRoot) : null;
   const scoreChipClass =
@@ -94,7 +103,7 @@ export default function StatusBar({
       <button
         type="button"
         className="status-bar__chip"
-        onClick={onShowSocial}
+        onClick={onShowSchedule}
         title="Scheduled posts"
       >
         <Megaphone size={11} strokeWidth={1.8} />
@@ -111,9 +120,24 @@ export default function StatusBar({
         Score {survivalScore ?? '—'}
       </button>
 
-      <button type="button" className="status-bar__chip" title="Security">
-        <ShieldCheck size={11} strokeWidth={1.8} />
-        0
+      <button
+        type="button"
+        className={`status-bar__chip ${securityBlocking ? 'is-danger' : securityFindings > 0 ? 'is-warn' : ''}`}
+        onClick={onShowSecurity}
+        title={
+          securityBlocking
+            ? 'Security review: blocking secrets in staged diff'
+            : securityFindings > 0
+              ? 'Security review: warnings in staged diff'
+              : 'Security review'
+        }
+      >
+        {securityBlocking ? (
+          <ShieldAlert size={11} strokeWidth={1.8} />
+        ) : (
+          <ShieldCheck size={11} strokeWidth={1.8} />
+        )}
+        {securityFindings}
       </button>
     </footer>
   );
