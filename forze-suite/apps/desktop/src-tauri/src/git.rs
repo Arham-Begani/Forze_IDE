@@ -154,6 +154,53 @@ pub fn git_commit(cwd: String, message: String) -> Result<String, String> {
     Ok(head.trim().to_string())
 }
 
+#[derive(Serialize)]
+pub struct GitCommit {
+    /// Full 40-char SHA.
+    pub hash: String,
+    /// Abbreviated SHA.
+    pub short: String,
+    pub author: String,
+    /// ISO-8601 author date.
+    pub date: String,
+    /// First line of the message.
+    pub subject: String,
+    /// Remaining message body (may be empty).
+    pub body: String,
+}
+
+/// The most recent commits on HEAD, newest first. Used by the "Build in Public"
+/// generator to draft a post from what was just shipped. Fields are separated by
+/// the unit separator (0x1f) and records by the record separator (0x1e) so commit
+/// messages containing newlines, pipes, etc. parse unambiguously.
+#[command]
+pub fn git_log(cwd: String, limit: u32) -> Result<Vec<GitCommit>, String> {
+    let n = limit.clamp(1, 100).to_string();
+    let format = "--pretty=format:%H%x1f%h%x1f%an%x1f%aI%x1f%s%x1f%b%x1e";
+    let raw = run_git(&cwd, &["log", "-n", &n, format])?;
+
+    let mut commits = Vec::new();
+    for record in raw.split('\u{1e}') {
+        let record = record.trim_start_matches('\n');
+        if record.trim().is_empty() {
+            continue;
+        }
+        let fields: Vec<&str> = record.split('\u{1f}').collect();
+        if fields.len() < 6 {
+            continue;
+        }
+        commits.push(GitCommit {
+            hash: fields[0].trim().to_string(),
+            short: fields[1].trim().to_string(),
+            author: fields[2].trim().to_string(),
+            date: fields[3].trim().to_string(),
+            subject: fields[4].trim().to_string(),
+            body: fields[5].trim().to_string(),
+        });
+    }
+    Ok(commits)
+}
+
 #[command]
 pub fn git_diff_file(cwd: String, path: String, staged: bool) -> Result<String, String> {
     let mut args = vec!["diff", "--no-color"];
@@ -163,6 +210,14 @@ pub fn git_diff_file(cwd: String, path: String, staged: bool) -> Result<String, 
     args.push("--");
     args.push(path.as_str());
     run_git(&cwd, &args)
+}
+
+/// The full staged diff (`git diff --cached`) — what a commit is about to record.
+/// This is the input to the pre-commit security review (Commit Guard): we scan
+/// the newly-added lines for leaked secrets before letting the commit through.
+#[command]
+pub fn git_diff_staged(cwd: String) -> Result<String, String> {
+    run_git(&cwd, &["diff", "--cached", "--no-color"])
 }
 
 /// The committed (HEAD) contents of a file, used as the baseline for the
