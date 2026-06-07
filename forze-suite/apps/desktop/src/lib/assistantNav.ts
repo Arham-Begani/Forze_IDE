@@ -53,7 +53,7 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   {
     id: 'ad-studio',
     label: 'Ad Studio',
-    blurb: 'Generate ad creative and marketing campaigns.',
+    blurb: 'Ad creative and campaigns, plus build-in-public posts to LinkedIn — draft from your commits, post now or schedule.',
     run: () => wb().openPage('ad-studio'),
   },
   {
@@ -74,6 +74,12 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     blurb: 'Manage your team and collaborators.',
     run: () => wb().openPage('team'),
   },
+  {
+    id: 'kanban',
+    label: 'Kanban',
+    blurb: 'The shared drag-and-drop task board the whole team can see and move.',
+    run: () => wb().openPage('kanban'),
+  },
   // Core IDE views (open in the left sidebar)
   {
     id: 'explorer',
@@ -92,12 +98,6 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: 'Source Control',
     blurb: 'Git status — stage hunks and commit.',
     run: () => wb().setActiveActivity('source-control'),
-  },
-  {
-    id: 'social',
-    label: 'Social',
-    blurb: 'Draft and schedule social posts about your launch.',
-    run: () => wb().setActiveActivity('social'),
   },
   {
     id: 'vibe',
@@ -145,4 +145,4 @@ export function navManifest(): string {
 }
 
 /** A handful of high-value destinations surfaced as quick chips in the UI. */
-export const QUICK_DESTINATIONS = ['agent-manager', 'social', 'vibe', 'settings'];
+export const QUICK_DESTINATIONS = ['agent-manager', 'ad-studio', 'vibe', 'settings'];
