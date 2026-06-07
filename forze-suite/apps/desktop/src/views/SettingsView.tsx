@@ -8,6 +8,9 @@ import {
   ExternalLink,
   Loader2,
   Rocket,
+  GitCommitHorizontal,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import { AnthropicProvider, GeminiProvider } from '@forze/agents';
 import { pickFolder } from '../lib/dialog';
@@ -16,9 +19,10 @@ import { useAgents } from '../workbench/agentStore';
 import { usesBuiltInKey } from '../workbench/aiConfig';
 import { openWorkspace } from '../workbench/actions';
 import { useProject } from '../workbench/projectStore';
-import { useSocial } from '../workbench/socialStore';
+import { useCommitGuard } from '../workbench/commitGuardStore';
 import { useIntegrations } from '../workbench/integrationsStore';
 import { verifyToken } from '../lib/vercel';
+import ToggleSwitch from '../shell/ToggleSwitch';
 import { toast } from '../shell/toast';
 
 export default function SettingsView(): JSX.Element {
@@ -28,8 +32,6 @@ export default function SettingsView(): JSX.Element {
   const setApiKey = useAgents((s) => s.setApiKey);
   const geminiBuiltIn = usesBuiltInKey(GeminiProvider.id, apiKeys);
   const workspaceRoot = useProject((s) => s.workspaceRoot);
-  const sessionToken = useSocial((s) => s.sessionToken);
-  const setSessionToken = useSocial((s) => s.setSessionToken);
 
   return (
     <section className="panel">
@@ -114,25 +116,103 @@ export default function SettingsView(): JSX.Element {
         />
       </div>
 
+      <CommitGuardCard />
+
       <VercelCard />
 
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <KeyRound size={13} strokeWidth={1.8} />
-          <strong style={{ fontSize: 13 }}>Social broker</strong>
-        </div>
-        <p className="dim">
-          Supabase session token (not persisted to disk; resets on quit).
-        </p>
-        <input
-          type="password"
-          value={sessionToken}
-          onChange={(e) => setSessionToken(e.target.value.trim())}
-          placeholder="eyJhbGciOi…"
-          style={{ width: '100%' }}
-        />
-      </div>
     </section>
+  );
+}
+
+function CommitGuardCard(): JSX.Element {
+  const autoCommit = useCommitGuard((s) => s.autoCommitEnabled);
+  const securityReview = useCommitGuard((s) => s.securityReviewEnabled);
+  const threshold = useCommitGuard((s) => s.threshold);
+  const setAutoCommit = useCommitGuard((s) => s.setAutoCommit);
+  const setSecurityReview = useCommitGuard((s) => s.setSecurityReview);
+  const setThreshold = useCommitGuard((s) => s.setThreshold);
+
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <GitCommitHorizontal size={13} strokeWidth={1.8} />
+        <strong style={{ fontSize: 13 }}>Commit Guard</strong>
+      </div>
+      <p className="dim">
+        Automate and protect your commits. These mirror the toggles in the
+        Source Control panel and apply to changes you make and changes your
+        agents make.
+      </p>
+
+      <SettingRow
+        icon={<Zap size={13} strokeWidth={1.8} />}
+        title="Auto-commit"
+        desc="Stage and commit automatically after every N saved changes."
+        control={
+          <ToggleSwitch checked={autoCommit} onChange={setAutoCommit} label="Auto-commit" />
+        }
+      />
+      {autoCommit && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            paddingLeft: 23,
+            fontSize: 12,
+          }}
+        >
+          <span className="dim">Commit every</span>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={threshold}
+            onChange={(e) => setThreshold(Number(e.target.value))}
+            style={{ width: 64 }}
+          />
+          <span className="dim">saved change{threshold === 1 ? '' : 's'}</span>
+        </div>
+      )}
+
+      <SettingRow
+        icon={<ShieldCheck size={13} strokeWidth={1.8} />}
+        title="Security review"
+        desc="Scan the staged diff before every commit and block on leaked API keys or secrets."
+        control={
+          <ToggleSwitch
+            checked={securityReview}
+            onChange={setSecurityReview}
+            label="Security review"
+          />
+        }
+      />
+    </div>
+  );
+}
+
+function SettingRow({
+  icon,
+  title,
+  desc,
+  control,
+}: {
+  icon: JSX.Element;
+  title: string;
+  desc: string;
+  control: JSX.Element;
+}): JSX.Element {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+      <span style={{ marginTop: 1, color: 'var(--color-text-muted)' }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600 }}>{title}</div>
+        <p className="dim" style={{ margin: '2px 0 0' }}>
+          {desc}
+        </p>
+      </div>
+      {control}
+    </div>
   );
 }
 
