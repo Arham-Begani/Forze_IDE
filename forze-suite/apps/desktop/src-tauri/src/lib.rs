@@ -1,5 +1,6 @@
 mod fs;
 mod git;
+mod linkedin;
 mod pty;
 
 use keyring::Entry;
@@ -388,8 +389,14 @@ pub fn run() {
             git::git_unstage,
             git::git_stage_all,
             git::git_commit,
+            git::git_log,
             git::git_diff_file,
+            git::git_diff_staged,
             git::git_file_head,
+            // linkedin oauth
+            linkedin::linkedin_configured,
+            linkedin::linkedin_login,
+            linkedin::linkedin_refresh,
             // pty
             pty::pty_spawn,
             pty::pty_write,
