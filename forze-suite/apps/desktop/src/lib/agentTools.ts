@@ -9,6 +9,7 @@
  * is rejected, so a worker can never touch files outside the open project.
  */
 import { useProject } from '../workbench/projectStore';
+import { noteChange } from '../workbench/commitGuard';
 import { joinPath, readDir, readFile, writeFile } from './fs';
 import { runCommand } from './exec';
 import { searchWorkspace, type FileResult } from './search';
@@ -119,6 +120,9 @@ export const AGENT_TOOLS: ToolDef[] = [
       // Keep the editor's dirty-tracking honest: the file on disk now matches
       // exactly what we wrote, so record it as the last known on-disk content.
       useProject.getState().setBuffer(file, contents);
+      // An agent edit is a real change — count it toward Auto-commit, just like
+      // a manual editor save. No-op when the toggle is off / not a git repo.
+      void noteChange();
       const bytes = new TextEncoder().encode(contents).length;
       return { ok: true, output: `Wrote ${bytes} bytes to ${path}.` };
     },
