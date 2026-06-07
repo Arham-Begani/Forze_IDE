@@ -28,6 +28,24 @@ interface IntegrationsState {
   setVercelToken: (token: string) => void;
   setVercelTeamId: (teamId: string) => void;
   setVercelProjectId: (projectId: string) => void;
+
+  // ---- LinkedIn publishing (Ad Studio "Build in Public") ----
+  /** OAuth2 access token from the "Log in with LinkedIn" flow. */
+  linkedinToken: string;
+  /** Cached author URN (`urn:li:person:…`) resolved from the token. */
+  linkedinUrn: string;
+  /** Access-token expiry, ms epoch (0 = unknown). */
+  linkedinExpiresAt: number;
+  /** Refresh token, when the LinkedIn app is approved to issue them. */
+  linkedinRefreshToken: string;
+
+  setLinkedinSession: (session: {
+    token: string;
+    refreshToken?: string;
+    expiresAt: number;
+  }) => void;
+  setLinkedinUrn: (urn: string) => void;
+  clearLinkedin: () => void;
 }
 
 export const useIntegrations = create<IntegrationsState>()(
@@ -39,6 +57,23 @@ export const useIntegrations = create<IntegrationsState>()(
       setVercelToken: (vercelToken) => set({ vercelToken: vercelToken.trim() }),
       setVercelTeamId: (vercelTeamId) => set({ vercelTeamId: vercelTeamId.trim() }),
       setVercelProjectId: (vercelProjectId) => set({ vercelProjectId }),
+
+      linkedinToken: '',
+      linkedinUrn: '',
+      linkedinExpiresAt: 0,
+      linkedinRefreshToken: '',
+      // A new session belongs to whoever just authenticated, so the cached URN
+      // is invalidated and re-resolved on the next post.
+      setLinkedinSession: ({ token, refreshToken, expiresAt }) =>
+        set({
+          linkedinToken: token.trim(),
+          linkedinRefreshToken: (refreshToken ?? '').trim(),
+          linkedinExpiresAt: expiresAt,
+          linkedinUrn: '',
+        }),
+      setLinkedinUrn: (linkedinUrn) => set({ linkedinUrn: linkedinUrn.trim() }),
+      clearLinkedin: () =>
+        set({ linkedinToken: '', linkedinUrn: '', linkedinExpiresAt: 0, linkedinRefreshToken: '' }),
     }),
     {
       name: 'forze.integrations.v1',
