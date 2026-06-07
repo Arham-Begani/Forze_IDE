@@ -6,7 +6,8 @@ import EditorArea from './shell/EditorArea';
 import BottomPanel from './shell/BottomPanel';
 import StatusBar from './shell/StatusBar';
 import TopBar from './shell/TopBar';
-import CommandBar from './shell/CommandBar';
+import TitleBar from './shell/TitleBar';
+import WindowResizers from './shell/WindowResizers';
 import CommandPalette from './shell/CommandPalette';
 import QuickOpen from './shell/QuickOpen';
 import FloatingAssistant from './shell/FloatingAssistant';
@@ -19,6 +20,8 @@ import { useAgents } from './workbench/agentStore';
 import { useWorkbench, type ActivityId } from './workbench/store';
 import { PANELS } from './workbench/panels';
 import { useProject } from './workbench/projectStore';
+import { useCommitGuard } from './workbench/commitGuardStore';
+import { partitionFindings } from './lib/diffScan';
 import { anyProviderReady } from './workbench/aiConfig';
 import {
   closeWorkspace,
@@ -27,8 +30,9 @@ import {
 } from './workbench/actions';
 import { commands } from './workbench/commands';
 import { useDiagnostics } from './workbench/diagnosticsStore';
-import { useSocial } from './workbench/socialStore';
-import { startSocialScheduler } from './workbench/socialScheduler';
+import { useBipSchedule } from './workbench/bipScheduleStore';
+import { startBipScheduler } from './workbench/bipScheduler';
+import { startPromptScheduler } from './workbench/promptScheduler';
 import { computeSurvivalScore } from './workbench/survivalScore';
 import { useKeybindings, keybindingHint } from './workbench/keybindings';
 import { pickFolder } from './lib/dialog';
@@ -63,7 +67,9 @@ export default function App(): JSX.Element {
   const isGitRepo = useProject((s) => s.isGitRepo);
   const pushDiagnostic = useDiagnostics((s) => s.push);
   const problemsCount = useDiagnostics((s) => s.entries.length);
-  const scheduledPostsCount = useSocial((s) => s.posts.length);
+  const scheduledPostsCount = useBipSchedule((s) => s.posts.length);
+  const lastReview = useCommitGuard((s) => s.lastReview);
+  const openPage = useWorkbench((s) => s.openPage);
   const hasAgentKey = useAgents((s) => anyProviderReady(s.apiKeys));
   const resetOnboarding = useOnboarding((s) => s.reset);
 
@@ -103,10 +109,27 @@ export default function App(): JSX.Element {
   useEffect(() => {
     let stop = () => undefined as void;
     try {
-      stop = startSocialScheduler();
+      stop = startBipScheduler();
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn('[forze] social scheduler failed to start', err);
+      console.warn('[forze] build-in-public scheduler failed to start', err);
+    }
+    return () => {
+      try {
+        stop();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let stop = () => undefined as void;
+    try {
+      stop = startPromptScheduler();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[forze] prompt scheduler failed to start', err);
     }
     return () => {
       try {
@@ -319,7 +342,6 @@ export default function App(): JSX.Element {
         title: 'Show Source Control',
         keybindingId: 'workbench.view.scm',
       },
-      { id: 'social', title: 'Show Social', keybindingId: 'workbench.view.social' },
       { id: 'vibe', title: 'Show Vibe Canvas', keybindingId: 'workbench.view.vibe' },
       {
         id: 'security',
@@ -370,6 +392,12 @@ export default function App(): JSX.Element {
   return (
     <>
       <div className="workbench">
+        <div className="workbench__titlebar">
+          <ErrorBoundary scope="Title bar">
+            <TitleBar onSelectAll={() => activeEditorRef.current?.selectAll()} />
+          </ErrorBoundary>
+        </div>
+
         <div className="workbench__topbar">
           <ErrorBoundary scope="Top bar">
             <TopBar
@@ -473,12 +501,6 @@ export default function App(): JSX.Element {
           )}
         </div>
 
-        <div className="workbench__commandbar">
-          <ErrorBoundary scope="Command bar">
-            <CommandBar />
-          </ErrorBoundary>
-        </div>
-
         <div className="workbench__status">
           <ErrorBoundary scope="Status bar">
             <StatusBar
@@ -488,13 +510,18 @@ export default function App(): JSX.Element {
               survivalBand={survival.band}
               problemsCount={problemsCount}
               scheduledPostsCount={scheduledPostsCount}
+              securityFindings={lastReview?.findings.length ?? 0}
+              securityBlocking={
+                partitionFindings(lastReview?.findings ?? []).blockers.length > 0
+              }
               onOpenFolder={async () => {
                 const picked = await pickFolder();
                 if (picked) await openWorkspace(picked);
               }}
               onShowProblems={() => setBottomPanelTab('problems')}
               onShowScore={() => void commands.run('workbench.action.boardroom.simulate')}
-              onShowSocial={() => setActiveActivity('social')}
+              onShowSchedule={() => openPage('ad-studio')}
+              onShowSecurity={() => setActiveActivity('security')}
             />
           </ErrorBoundary>
         </div>
@@ -504,6 +531,7 @@ export default function App(): JSX.Element {
       <FloatingAssistant />
       <OnboardingWizard />
       <ToastHost />
+      <WindowResizers />
     </>
   );
 }
