@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  SquareKanban,
   SquareTerminal,
   Users,
 } from 'lucide-react';
@@ -27,7 +28,6 @@ import type { ActivityId } from './store';
 import ExplorerView from '../views/ExplorerView';
 const SearchView = lazy(() => import('../views/SearchView'));
 const SourceControlView = lazy(() => import('../views/SourceControlView'));
-const SocialView = lazy(() => import('../views/SocialView'));
 const VibeCanvas = lazy(() => import('../views/VibeCanvas'));
 const SecurityAuditor = lazy(() => import('../views/SecurityAuditor'));
 const SettingsView = lazy(() => import('../views/SettingsView'));
@@ -40,6 +40,7 @@ const AdStudioPage = lazy(() => import('../views/pages/AdStudioPage'));
 const VibeStationsPage = lazy(() => import('../views/pages/VibeStationsPage'));
 const CommunityPage = lazy(() => import('../views/pages/CommunityPage'));
 const TeamPage = lazy(() => import('../views/pages/TeamPage'));
+const KanbanPage = lazy(() => import('../views/pages/KanbanPage'));
 
 export interface PanelContext {
   onInsertCode: (snippet: string) => void;
@@ -49,7 +50,9 @@ export interface PanelDef {
   id: ActivityId;
   title: string;
   icon: LucideIcon;
-  group: 'core' | 'skill';
+  /** 'core' → activity rail + sidebar; 'skill' → Apps launcher grid;
+   *  'board' → its own dedicated rail entry (the shared Kanban). */
+  group: 'core' | 'skill' | 'board';
   render: (ctx: PanelContext) => ReactNode;
 }
 
@@ -57,7 +60,6 @@ export const PANELS: Record<ActivityId, PanelDef> = {
   explorer: { id: 'explorer', title: 'Explorer', icon: Files, group: 'core', render: () => <ExplorerView /> },
   search: { id: 'search', title: 'Search', icon: Search, group: 'core', render: () => <SearchView /> },
   'source-control': { id: 'source-control', title: 'Source Control', icon: GitBranch, group: 'core', render: () => <SourceControlView /> },
-  social: { id: 'social', title: 'Social', icon: Megaphone, group: 'core', render: () => <SocialView /> },
   vibe: { id: 'vibe', title: 'Vibe Canvas', icon: Sparkles, group: 'core', render: (ctx) => <VibeCanvas onInsertCode={ctx.onInsertCode} /> },
   security: { id: 'security', title: 'Security', icon: ShieldCheck, group: 'core', render: () => <SecurityAuditor /> },
   settings: { id: 'settings', title: 'Settings', icon: Settings, group: 'core', render: () => <SettingsView /> },
@@ -70,7 +72,12 @@ export const PANELS: Record<ActivityId, PanelDef> = {
   'vibe-stations': { id: 'vibe-stations', title: 'Vibe Stations', icon: SquareTerminal, group: 'skill', render: () => <VibeStationsPage /> },
   community: { id: 'community', title: 'Community', icon: MessagesSquare, group: 'skill', render: () => <CommunityPage /> },
   team: { id: 'team', title: 'Team', icon: Users, group: 'skill', render: () => <TeamPage /> },
+
+  // The shared team board gets its own home in the rail, just below Apps.
+  kanban: { id: 'kanban', title: 'Kanban', icon: SquareKanban, group: 'board', render: () => <KanbanPage /> },
 };
 
 export const CORE_PANELS = Object.values(PANELS).filter((p) => p.group === 'core');
 export const SKILL_PANELS = Object.values(PANELS).filter((p) => p.group === 'skill');
+/** The shared board — surfaced as its own rail entry below the Apps launcher. */
+export const BOARD_PANEL = PANELS.kanban;
