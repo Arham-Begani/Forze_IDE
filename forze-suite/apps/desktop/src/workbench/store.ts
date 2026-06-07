@@ -6,7 +6,6 @@ export type ActivityId =
   | 'explorer'
   | 'search'
   | 'source-control'
-  | 'social'
   | 'vibe'
   | 'security'
   | 'settings'
@@ -18,7 +17,8 @@ export type ActivityId =
   | 'ad-studio'
   | 'vibe-stations'
   | 'community'
-  | 'team';
+  | 'team'
+  | 'kanban';
 
 /** Every activity id the app currently ships. The single source of truth used
  *  to sanitize persisted state — a removed or renamed panel (e.g. the retired
@@ -28,7 +28,6 @@ export const ALL_ACTIVITY_IDS: readonly ActivityId[] = [
   'explorer',
   'search',
   'source-control',
-  'social',
   'vibe',
   'security',
   'settings',
@@ -40,6 +39,7 @@ export const ALL_ACTIVITY_IDS: readonly ActivityId[] = [
   'vibe-stations',
   'community',
   'team',
+  'kanban',
 ];
 
 const KNOWN_ACTIVITY = new Set<string>(ALL_ACTIVITY_IDS);
@@ -77,6 +77,7 @@ export const PAGE_TITLES: Partial<Record<ActivityId, string>> = {
   'vibe-stations': 'Vibe Stations',
   community: 'Community',
   team: 'Team',
+  kanban: 'Kanban',
 };
 
 export type BottomPanelTab = 'terminal' | 'problems' | 'output';
