@@ -6,6 +6,14 @@ import {
   userMsg,
 } from '../lib/ai';
 import { findDestination, navManifest } from '../lib/assistantNav';
+import { parseWhen } from '../lib/parseWhen';
+import { usePromptSchedule } from './promptScheduleStore';
+import {
+  parseStationLabel,
+  stationManifest,
+  targetLabel,
+  useVibeStations,
+} from './vibeStationsStore';
 
 /**
  * State + engine for the Forze Assistant (the floating chat bubble). Kept in a
@@ -25,7 +33,7 @@ const GREETING =
   "Hi — I'm your Forze guide. Tell me what you want to do and I'll take you there " +
   '(“build a feature”, “post about my launch”, “deploy”…), or just ask me what to do next.';
 
-const SYSTEM =
+const SYSTEM_BASE =
   'You are the Forze Assistant, a warm, concise in-app guide for Forze IDE — a ' +
   '"builder OS" for solo founders who vibe-code. You help the user decide what to ' +
   'do and you can NAVIGATE the app for them.\n\n' +
@@ -42,12 +50,29 @@ const SYSTEM =
   'Manager — when the user wants to build, change, or ship something in their ' +
   'code, take them there. Never invent destinations or ids.';
 
+const SCHEDULE_DOCS =
+  '\n\nYou can also SCHEDULE a prompt to run later on a Vibe Station (a coding-agent ' +
+  'CLI terminal like Claude Code). When the user asks for this — e.g. "tell Claude ' +
+  'Code #1 to run \'fix the tests\' at 9pm" — add a schedule action to the same json ' +
+  'block: {"actions":[{"schedule":{"station":"Claude Code #1","prompt":"<the exact ' +
+  'prompt to run, verbatim>","when":"9pm"}}]}. Rules: copy the prompt text exactly as ' +
+  'the user gave it; "station" must name one of the stations below (or another like ' +
+  '"Codex #2" — if it isn\'t open yet it will be auto-started); "when" is a short, ' +
+  'literal time phrase ("9pm", "21:00", "in 30 minutes", "tomorrow 9am") — do NOT ' +
+  'convert it to a date yourself, just pass the phrase. Still write one friendly ' +
+  'sentence of prose before the block.\n\nVibe Stations currently open:\n';
+
+/** Built per-turn so the live list of open Vibe Stations is always current. */
+function buildSystem(): string {
+  return SYSTEM_BASE + SCHEDULE_DOCS + stationManifest(useVibeStations.getState().stations);
+}
+
 /** Strip the hidden json action block(s) so the user only reads the prose. */
 function visibleText(raw: string): string {
   return raw
     .replace(/```json[\s\S]*?```/gi, '')
     .replace(/```json[\s\S]*$/i, '') // unclosed block mid-stream
-    .replace(/\{\s*"actions"[\s\S]*$/i, '') // bare json mid-stream
+    .replace(/\{\s*"(?:actions|schedule|open)"[\s\S]*$/i, '') // bare json mid-stream
     .trim();
 }
 
@@ -55,29 +80,55 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
 
-function collectIds(parsed: unknown): string[] {
+export interface ScheduleAction {
+  station: string;
+  prompt: string;
+  when: string;
+}
+
+interface ParsedActions {
+  navIds: string[];
+  schedules: ScheduleAction[];
+}
+
+/** Split a parsed action payload into nav ids and schedule actions. Tolerant of
+ *  shapes: a bare action object, an array, or an `{actions:[...]}` wrapper. */
+function collectActions(parsed: unknown): ParsedActions {
   const list: unknown[] = Array.isArray(parsed)
     ? parsed
     : isRecord(parsed)
       ? Array.isArray(parsed.actions)
         ? parsed.actions
-        : 'open' in parsed || 'target' in parsed
+        : 'open' in parsed || 'target' in parsed || 'schedule' in parsed
           ? [parsed]
           : []
       : [];
-  const ids: string[] = [];
+  const navIds: string[] = [];
+  const schedules: ScheduleAction[] = [];
   for (const item of list) {
-    if (typeof item === 'string') ids.push(item);
-    else if (isRecord(item)) {
+    if (typeof item === 'string') {
+      navIds.push(item);
+    } else if (isRecord(item)) {
+      if (isRecord(item.schedule)) {
+        const s = item.schedule;
+        if (typeof s.station === 'string' && typeof s.prompt === 'string') {
+          schedules.push({
+            station: s.station,
+            prompt: s.prompt,
+            when: typeof s.when === 'string' ? s.when : '',
+          });
+        }
+        continue;
+      }
       const id = item.open ?? item.target ?? item.id ?? item.destination;
-      if (typeof id === 'string') ids.push(id);
+      if (typeof id === 'string') navIds.push(id);
     }
   }
-  return ids;
+  return { navIds, schedules };
 }
 
-/** Pull destination ids out of the model's action block. Tolerant of shapes. */
-function parseNavActions(raw: string): string[] {
+/** Pull nav + schedule actions out of the model's json block. Tolerant of shapes. */
+function parseActions(raw: string): ParsedActions {
   const fences = [...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
   const candidates = fences.length ? [fences[fences.length - 1]![1]!] : [raw];
   for (const candidate of candidates) {
@@ -93,10 +144,40 @@ function parseNavActions(raw: string): string[] {
     } catch {
       continue;
     }
-    const ids = collectIds(parsed);
-    if (ids.length) return ids;
+    const result = collectActions(parsed);
+    if (result.navIds.length || result.schedules.length) return result;
   }
-  return [];
+  return { navIds: [], schedules: [] };
+}
+
+/** Format an epoch ms as a short local time for the confirmation line. */
+function formatWhen(ms: number): string {
+  const d = new Date(ms);
+  const sameDay = new Date().toDateString() === d.toDateString();
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return sameDay ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+}
+
+/** Apply the schedule actions; returns confirmation/help lines to show the user. */
+function runScheduleActions(actions: ScheduleAction[]): string[] {
+  const lines: string[] = [];
+  for (const action of actions) {
+    const target = parseStationLabel(action.station);
+    if (!target) {
+      lines.push(`I couldn't tell which station "${action.station}" means.`);
+      continue;
+    }
+    const prompt = action.prompt.trim();
+    if (!prompt) continue;
+    const when = parseWhen(action.when);
+    if (when === null) {
+      lines.push(`When should I run that on ${targetLabel(target)}? Try "9pm" or "in 30 minutes".`);
+      continue;
+    }
+    usePromptSchedule.getState().schedule(target, prompt, when);
+    lines.push(`Scheduled on ${targetLabel(target)} for ${formatWhen(when)}.`);
+  }
+  return lines;
 }
 
 interface AssistantState {
@@ -164,7 +245,7 @@ export const useAssistant = create<AssistantState>((set, get) => ({
     let full = '';
     try {
       await streamConversation(convo, {
-        system: SYSTEM,
+        system: buildSystem(),
         maxTokens: 900,
         signal: controller.signal,
         onDelta: (delta) => {
@@ -182,17 +263,31 @@ export const useAssistant = create<AssistantState>((set, get) => ({
       return;
     }
 
-    // Finalise the visible prose, then perform any navigation it requested.
+    // Finalise the visible prose, then perform the navigation / scheduling it asked for.
+    const { navIds, schedules } = parseActions(full);
     const opened: string[] = [];
-    for (const id of parseNavActions(full)) {
+    for (const id of navIds) {
       const dest = findDestination(id);
       if (dest) {
         void dest.run();
         opened.push(dest.label);
       }
     }
+    const scheduleLines = runScheduleActions(schedules);
+
     const shown = visibleText(full);
-    replaceLast(shown || (opened.length ? `Opening ${opened.join(' and ')}.` : '…'));
+    let message: string;
+    if (shown) {
+      // Prose + any scheduling confirmations appended.
+      message = scheduleLines.length ? `${shown}\n\n${scheduleLines.join('\n')}` : shown;
+    } else if (scheduleLines.length) {
+      message = scheduleLines.join('\n');
+    } else if (opened.length) {
+      message = `Opening ${opened.join(' and ')}.`;
+    } else {
+      message = '…';
+    }
+    replaceLast(message);
     set({ streaming: false });
     controller = null;
   },
