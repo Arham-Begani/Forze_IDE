@@ -1,17 +1,33 @@
-import { Check, GitBranch, Minus, Plus, RefreshCw } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  GitBranch,
+  Loader2,
+  Minus,
+  Plus,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  Zap,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  commit as gitCommit,
   describeStatus,
   stage as gitStage,
   stageAll as gitStageAll,
   unstage as gitUnstage,
   type GitStatusEntry,
 } from '../lib/git';
+import { partitionFindings } from '../lib/diffScan';
+import type { SecretFinding } from '../lib/secretRules';
 import { basename, dirname, joinPath } from '../lib/fs';
 import { openFile } from '../workbench/actions';
+import { guardedCommit, reviewStaged } from '../workbench/commitGuard';
+import { useCommitGuard, type ReviewResult } from '../workbench/commitGuardStore';
 import { useGitStatus } from '../workbench/gitStatusStore';
 import { useProject } from '../workbench/projectStore';
+import ToggleSwitch from '../shell/ToggleSwitch';
+import { toast } from '../shell/toast';
 
 export default function SourceControlView(): JSX.Element {
   const workspaceRoot = useProject((s) => s.workspaceRoot);
@@ -74,9 +90,17 @@ export default function SourceControlView(): JSX.Element {
     if (!workspaceRoot || !message.trim() || !hasStaged) return;
     setBusy(true);
     try {
-      await gitCommit(workspaceRoot, message.trim());
-      setMessage('');
-      setActionError(null);
+      // Routes through the Security Review gate when the toggle is on.
+      const outcome = await guardedCommit(workspaceRoot, message.trim());
+      if (outcome.blocked) {
+        const why = outcome.message ?? 'Commit blocked by security review.';
+        setActionError(why);
+        toast(why, 'error');
+      } else {
+        setMessage('');
+        setActionError(null);
+        toast(`Committed ${outcome.hash?.slice(0, 7) ?? ''}`.trim(), 'success');
+      }
       await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -107,6 +131,8 @@ export default function SourceControlView(): JSX.Element {
           <RefreshCw size={12} />
         </button>
       </header>
+
+      <CommitGuardPanel workspaceRoot={workspaceRoot} hasStaged={hasStaged} />
 
       <textarea
         className="scm__message"
@@ -283,5 +309,155 @@ function ChangeGroup({
         );
       })}
     </section>
+  );
+}
+
+/**
+ * Commit Guard controls: the Auto-commit and Security review toggles, the
+ * progress toward the next auto-commit, and a summary of the last review.
+ */
+function CommitGuardPanel({
+  workspaceRoot,
+  hasStaged,
+}: {
+  workspaceRoot: string;
+  hasStaged: boolean;
+}): JSX.Element {
+  const autoCommit = useCommitGuard((s) => s.autoCommitEnabled);
+  const securityReview = useCommitGuard((s) => s.securityReviewEnabled);
+  const threshold = useCommitGuard((s) => s.threshold);
+  const pending = useCommitGuard((s) => s.pending);
+  const busy = useCommitGuard((s) => s.busy);
+  const lastReview = useCommitGuard((s) => s.lastReview);
+  const setAutoCommit = useCommitGuard((s) => s.setAutoCommit);
+  const setSecurityReview = useCommitGuard((s) => s.setSecurityReview);
+  const setThreshold = useCommitGuard((s) => s.setThreshold);
+
+  const [reviewing, setReviewing] = useState(false);
+  const pct = Math.min(100, Math.round((pending / Math.max(1, threshold)) * 100));
+
+  const runReview = async () => {
+    setReviewing(true);
+    try {
+      await reviewStaged(workspaceRoot);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'error');
+    } finally {
+      setReviewing(false);
+    }
+  };
+
+  return (
+    <section className="scm__guard">
+      <div className="scm__guard-row">
+        <span className="scm__guard-label">
+          <Zap size={12} strokeWidth={2} />
+          Auto-commit
+          {busy && <Loader2 size={11} className="spin" />}
+        </span>
+        <ToggleSwitch
+          checked={autoCommit}
+          onChange={setAutoCommit}
+          label="Auto-commit every N saved changes"
+        />
+      </div>
+      {autoCommit && (
+        <div className="scm__guard-detail">
+          <div className="scm__guard-bar">
+            <span style={{ width: `${pct}%` }} />
+          </div>
+          <div className="scm__guard-meta">
+            <span>
+              {pending} / {threshold} saved change{threshold === 1 ? '' : 's'}
+            </span>
+            <span className="scm__guard-step">
+              <button
+                type="button"
+                onClick={() => setThreshold(threshold - 1)}
+                disabled={threshold <= 1}
+                aria-label="Lower threshold"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => setThreshold(threshold + 1)}
+                disabled={threshold >= 100}
+                aria-label="Raise threshold"
+              >
+                +
+              </button>
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="scm__guard-row">
+        <span className="scm__guard-label">
+          <ShieldCheck size={12} strokeWidth={2} />
+          Security review
+        </span>
+        <ToggleSwitch
+          checked={securityReview}
+          onChange={setSecurityReview}
+          label="Scan the staged diff for leaked secrets before committing"
+        />
+      </div>
+      {securityReview && (
+        <div className="scm__guard-detail">
+          <ReviewSummary lastReview={lastReview} />
+          <button
+            type="button"
+            className="scm__guard-review"
+            onClick={runReview}
+            disabled={!hasStaged || reviewing}
+            title={hasStaged ? 'Scan the staged diff now' : 'Stage changes to review'}
+          >
+            {reviewing ? <Loader2 size={11} className="spin" /> : <ShieldCheck size={11} />}
+            {reviewing ? 'Reviewing…' : 'Review staged'}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ReviewSummary({ lastReview }: { lastReview: ReviewResult | null }): JSX.Element {
+  if (!lastReview) {
+    return (
+      <p className="scm__guard-hint">
+        Blocks a commit if an API key or secret appears in the staged diff.
+      </p>
+    );
+  }
+  const { blockers, warnings } = partitionFindings(lastReview.findings);
+  if (lastReview.findings.length === 0) {
+    return (
+      <p className="scm__guard-clean">
+        <Check size={11} /> Last review clean — nothing leaked.
+      </p>
+    );
+  }
+  return (
+    <div className="scm__guard-findings">
+      <p className={blockers.length > 0 ? 'scm__guard-bad' : 'scm__guard-warn'}>
+        {blockers.length > 0 ? <ShieldAlert size={11} /> : <AlertTriangle size={11} />}
+        {blockers.length > 0
+          ? `${blockers.length} secret${blockers.length > 1 ? 's' : ''} block this commit`
+          : `${warnings.length} warning${warnings.length > 1 ? 's' : ''} to review`}
+      </p>
+      {lastReview.findings.slice(0, 8).map((f, i) => (
+        <div
+          key={`${f.file}-${f.line}-${i}`}
+          className={`scm__guard-finding is-${f.severity}`}
+          title={f.excerpt}
+        >
+          <span className="scm__guard-rule">{f.rule}</span>
+          <span className="scm__guard-loc">
+            {f.file ? `${basename(f.file)}:${f.line}` : `L${f.line}`}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
