@@ -115,10 +115,10 @@
   --color-command-border: rgba(var(--color-accent-rgb), 0.18);
 
   /* Sizing */
+  --size-titlebar-chrome: 34px; /* VS Code-style menu/window-controls bar */
   --size-titlebar: 40px;
   --size-rail: 52px;
   --size-status-bar: 28px;
-  --size-command-bar: 64px;
   --size-bottom-panel-default: 260px;
   --size-sidebar-min: 220px;
   --size-sidebar-default: 280px;
@@ -170,10 +170,10 @@
 }
 
 :root[data-theme='forze-midnight'] {
-  --color-bg: #000000;
-  --color-bg-elevated: #040404;
-  --color-surface: #070707;
-  --color-card: #050505;
+  --color-bg: #04060f;
+  --color-bg-elevated: #070a16;
+  --color-surface: #0a0e1d;
+  --color-card: #080b17;
   --color-surface-hover: rgba(var(--color-accent-rgb), 0.08);
   --color-surface-active: rgba(var(--color-accent-rgb), 0.14);
   --color-border: rgba(229, 229, 229, 0.08);
@@ -182,13 +182,14 @@
   --color-accent-bright: #8df0ff;
   --color-accent-soft: rgba(var(--color-accent-rgb), 0.11);
   --color-accent-border: rgba(var(--color-accent-rgb), 0.34);
-  --color-rail-bg: #000000;
-  --color-sidebar-bg: rgba(4, 4, 4, 0.74);
-  --color-editor-bg: #000000;
-  --color-terminal-bg: #000000;
+  --color-rail-bg: #04060f;
+  --color-sidebar-bg: rgba(7, 10, 22, 0.74);
+  --color-editor-bg: #04060f;
+  --color-editor-gutter: #04060f;
+  --color-terminal-bg: #04060f;
   --color-tab-bg-active: rgba(229, 229, 229, 0.06);
-  --color-command-bg: rgba(0, 0, 0, 0.74);
-  --color-status-bg: #000000;
+  --color-command-bg: rgba(4, 6, 15, 0.74);
+  --color-status-bg: #04060f;
   --backdrop-gradient: none;
   color-scheme: dark;
 }
@@ -339,16 +340,27 @@
 }
 
 /* === Accent-varied themes ================================================
-   All share the matte-black canvas; they only swap the accent channel
-   (`--color-accent-rgb`) plus the accent hexes and the ink that sits on
-   accent fills. Every accent surface in the chrome reads through the
-   channel, so these few lines recolor the entire IDE. */
+   Each swaps the accent channel (`--color-accent-rgb`) plus the accent hexes
+   and the ink on accent fills — and now also tints the whole canvas with a
+   very dark shade of that accent so the background moves away from pure black.
+   The surface tokens below all read into the chrome (bg/editor/terminal/rail/
+   status), so these few lines recolor the entire IDE, canvas included. */
 
 :root[data-theme='forze-indigo'] {
   --color-accent-rgb: 99, 102, 241;
   --color-accent: #6366f1;
   --color-accent-bright: #9b9dff;
   --color-on-accent: #f4f5ff;
+  --color-bg: #07070e;
+  --color-bg-elevated: #0b0b16;
+  --color-surface: #0e0e1b;
+  --color-card: #0c0c17;
+  --color-rail-bg: #07070e;
+  --color-sidebar-bg: rgba(11, 11, 22, 0.74);
+  --color-status-bg: #07070e;
+  --color-editor-bg: #07070e;
+  --color-editor-gutter: #07070e;
+  --color-terminal-bg: #07070e;
   color-scheme: dark;
 }
 
@@ -357,6 +369,16 @@
   --color-accent: #10b981;
   --color-accent-bright: #4ee2b5;
   --color-on-accent: #03140e;
+  --color-bg: #040b08;
+  --color-bg-elevated: #071310;
+  --color-surface: #0a1814;
+  --color-card: #081511;
+  --color-rail-bg: #040b08;
+  --color-sidebar-bg: rgba(7, 19, 16, 0.74);
+  --color-status-bg: #040b08;
+  --color-editor-bg: #040b08;
+  --color-editor-gutter: #040b08;
+  --color-terminal-bg: #040b08;
   color-scheme: dark;
 }
 
@@ -365,6 +387,16 @@
   --color-accent: #f5a623;
   --color-accent-bright: #ffc861;
   --color-on-accent: #1a1204;
+  --color-bg: #0d0a04;
+  --color-bg-elevated: #14100a;
+  --color-surface: #1a150c;
+  --color-card: #15110a;
+  --color-rail-bg: #0d0a04;
+  --color-sidebar-bg: rgba(20, 16, 10, 0.74);
+  --color-status-bg: #0d0a04;
+  --color-editor-bg: #0d0a04;
+  --color-editor-gutter: #0d0a04;
+  --color-terminal-bg: #0d0a04;
   color-scheme: dark;
 }
 
@@ -373,6 +405,16 @@
   --color-accent: #fb7185;
   --color-accent-bright: #ff9fb0;
   --color-on-accent: #1c060c;
+  --color-bg: #0e0709;
+  --color-bg-elevated: #170b0f;
+  --color-surface: #1d0f13;
+  --color-card: #180c10;
+  --color-rail-bg: #0e0709;
+  --color-sidebar-bg: rgba(23, 11, 15, 0.74);
+  --color-status-bg: #0e0709;
+  --color-editor-bg: #0e0709;
+  --color-editor-gutter: #0e0709;
+  --color-terminal-bg: #0e0709;
   color-scheme: dark;
 }
 
@@ -381,6 +423,16 @@
   --color-accent: #a855f7;
   --color-accent-bright: #c98cff;
   --color-on-accent: #f9f4ff;
+  --color-bg: #0a060e;
+  --color-bg-elevated: #110a18;
+  --color-surface: #160e1f;
+  --color-card: #120b1a;
+  --color-rail-bg: #0a060e;
+  --color-sidebar-bg: rgba(17, 10, 24, 0.74);
+  --color-status-bg: #0a060e;
+  --color-editor-bg: #0a060e;
+  --color-editor-gutter: #0a060e;
+  --color-terminal-bg: #0a060e;
   color-scheme: dark;
 }
 
@@ -389,5 +441,15 @@
   --color-accent: #f43f5e;
   --color-accent-bright: #ff7185;
   --color-on-accent: #fff1f3;
+  --color-bg: #0e0608;
+  --color-bg-elevated: #170a0d;
+  --color-surface: #1d0d11;
+  --color-card: #180a0e;
+  --color-rail-bg: #0e0608;
+  --color-sidebar-bg: rgba(23, 10, 13, 0.74);
+  --color-status-bg: #0e0608;
+  --color-editor-bg: #0e0608;
+  --color-editor-gutter: #0e0608;
+  --color-terminal-bg: #0e0608;
   color-scheme: dark;
 }
