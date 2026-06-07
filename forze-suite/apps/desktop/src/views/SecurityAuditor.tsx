@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
-
-interface SecretFinding {
-  rule: string;
-  line: number;
-  excerpt: string;
-}
+import { ShieldAlert, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { scanText, type SecretFinding } from '../lib/secretRules';
+import { partitionFindings } from '../lib/diffScan';
+import { basename } from '../lib/fs';
+import { reviewStaged } from '../workbench/commitGuard';
+import { useCommitGuard } from '../workbench/commitGuardStore';
+import { useProject } from '../workbench/projectStore';
 
 interface RlsFinding {
   file: string;
@@ -12,19 +13,13 @@ interface RlsFinding {
   reason: 'missing-enable-rls' | 'missing-policy';
 }
 
-const SECRET_RULES: { name: string; pattern: RegExp }[] = [
-  { name: 'GEMINI_API_KEY', pattern: /AIza[0-9A-Za-z\-_]{30,}/ },
-  { name: 'STRIPE_SECRET_KEY', pattern: /sk_(?:live|test)_[0-9A-Za-z]{20,}/ },
-  { name: 'OPENAI_API_KEY', pattern: /sk-[A-Za-z0-9]{20,}/ },
-  { name: 'SUPABASE_SERVICE_ROLE', pattern: /eyJhbGciOi[A-Za-z0-9._-]{40,}/ },
-  { name: 'AWS_ACCESS_KEY', pattern: /AKIA[0-9A-Z]{16}/ },
-];
-
 /**
- * Built-in Vibe Security Auditor. Two scans run in-process so it works
- * offline: secret detection on the active buffer and an RLS sanity check
- * against Supabase migration SQL. Phase 4 swaps the textareas for live reads
- * via the MCP `forze.security.scan_buffer` tool.
+ * Built-in Vibe Security Auditor. The secret scanner and the pre-commit review
+ * share one rule engine (`lib/secretRules.ts`) with the Commit Guard, so what
+ * blocks a commit is exactly what this panel flags. Three tools:
+ *  - Pre-commit review: scan the live staged diff (the same gate auto-commit runs)
+ *  - Secret watcher: scan an arbitrary buffer offline
+ *  - Supabase RLS scanner: catch tables created without row-level security
  */
 export default function SecurityAuditor(): JSX.Element {
   const [bufferPath, setBufferPath] = useState('app/components/Hero.tsx');
@@ -35,16 +30,8 @@ export default function SecurityAuditor(): JSX.Element {
   const [rlsFindings, setRlsFindings] = useState<RlsFinding[]>([]);
 
   const runSecretScan = useCallback(() => {
-    const findings: SecretFinding[] = [];
-    bufferContents.split(/\r?\n/).forEach((line, idx) => {
-      for (const rule of SECRET_RULES) {
-        if (rule.pattern.test(line)) {
-          findings.push({ rule: rule.name, line: idx + 1, excerpt: line.slice(0, 160) });
-        }
-      }
-    });
-    setSecretFindings(findings);
-  }, [bufferContents]);
+    setSecretFindings(scanText(bufferContents, bufferPath || null));
+  }, [bufferContents, bufferPath]);
 
   const runRlsScan = useCallback(() => {
     const findings: RlsFinding[] = [];
@@ -79,6 +66,8 @@ export default function SecurityAuditor(): JSX.Element {
         and tables that lack at least one policy.
       </p>
 
+      <PrecommitReview />
+
       <div className="card">
         <strong>Secret Watcher</strong>
         <p className="muted" style={{ marginTop: 4 }}>
@@ -109,17 +98,7 @@ export default function SecurityAuditor(): JSX.Element {
         {secretFindings.length === 0 ? (
           <p className="muted" style={{ marginTop: 8 }}>No findings.</p>
         ) : (
-          <div style={{ marginTop: 8 }}>
-            {secretFindings.map((finding, index) => (
-              <div key={`${finding.rule}-${index}`} className="finding severity-error">
-                <span>{finding.rule}</span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {finding.excerpt}
-                </span>
-                <span>L{finding.line}</span>
-              </div>
-            ))}
-          </div>
+          <FindingList findings={secretFindings} />
         )}
       </div>
 
@@ -155,6 +134,124 @@ export default function SecurityAuditor(): JSX.Element {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * Pre-commit review card — runs the exact gate the Commit Guard uses against the
+ * live staged diff, and reflects the result of the last automatic review (e.g.
+ * the one that just paused an auto-commit).
+ */
+function PrecommitReview(): JSX.Element {
+  const workspaceRoot = useProject((s) => s.workspaceRoot);
+  const isGitRepo = useProject((s) => s.isGitRepo);
+  const securityReview = useCommitGuard((s) => s.securityReviewEnabled);
+  const lastReview = useCommitGuard((s) => s.lastReview);
+  const [busy, setBusy] = useState(false);
+
+  const run = useCallback(async () => {
+    if (!workspaceRoot) return;
+    setBusy(true);
+    try {
+      await reviewStaged(workspaceRoot);
+    } catch {
+      /* surfaced via the empty/last-review state */
+    } finally {
+      setBusy(false);
+    }
+  }, [workspaceRoot]);
+
+  // Surface the current staged state the moment the panel opens.
+  useEffect(() => {
+    if (workspaceRoot && isGitRepo) void run();
+  }, [workspaceRoot, isGitRepo, run]);
+
+  const findings = lastReview?.findings ?? [];
+  const { blockers, warnings } = partitionFindings(findings);
+
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <ShieldCheck size={14} strokeWidth={1.8} />
+        <strong>Pre-commit review</strong>
+        {!securityReview && (
+          <span className="muted" style={{ marginLeft: 'auto', fontSize: 11 }}>
+            gate off — enable in Source Control
+          </span>
+        )}
+      </div>
+      <p className="muted" style={{ marginTop: 4 }}>
+        Scans the newly-added lines of your staged diff for leaked secrets — the
+        same check that gates every commit.
+      </p>
+
+      {!isGitRepo ? (
+        <p className="muted" style={{ marginTop: 8 }}>Open a git repository to review staged changes.</p>
+      ) : (
+        <>
+          <div style={{ marginTop: 8 }}>
+            <button type="button" onClick={run} disabled={busy}>
+              {busy ? (
+                <Loader2 size={12} className="spin" style={{ verticalAlign: 'text-bottom', marginRight: 4 }} />
+              ) : null}
+              {busy ? 'Reviewing…' : 'Review staged changes'}
+            </button>
+          </div>
+
+          {lastReview && findings.length === 0 && (
+            <p className="finding severity-ok" style={{ marginTop: 8 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <ShieldCheck size={12} /> Clean — nothing leaked in the staged diff.
+              </span>
+            </p>
+          )}
+
+          {findings.length > 0 && (
+            <>
+              <p
+                style={{
+                  marginTop: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  color: blockers.length > 0 ? 'var(--color-danger)' : 'var(--color-warn, #f5a623)',
+                  fontSize: 12,
+                }}
+              >
+                {blockers.length > 0 ? <ShieldAlert size={13} /> : <AlertTriangle size={13} />}
+                {blockers.length > 0
+                  ? `${blockers.length} blocking secret${blockers.length > 1 ? 's' : ''}`
+                  : ''}
+                {blockers.length > 0 && warnings.length > 0 ? ' · ' : ''}
+                {warnings.length > 0 ? `${warnings.length} warning${warnings.length > 1 ? 's' : ''}` : ''}
+              </p>
+              <FindingList findings={findings} />
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function FindingList({ findings }: { findings: SecretFinding[] }): JSX.Element {
+  return (
+    <div style={{ marginTop: 8 }}>
+      {findings.map((finding, index) => (
+        <div
+          key={`${finding.rule}-${finding.file}-${finding.line}-${index}`}
+          className={`finding ${finding.severity === 'block' ? 'severity-error' : ''}`}
+        >
+          <span>{finding.rule}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {finding.excerpt}
+          </span>
+          <span>
+            {finding.file ? `${basename(finding.file)}:${finding.line}` : `L${finding.line}`}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
