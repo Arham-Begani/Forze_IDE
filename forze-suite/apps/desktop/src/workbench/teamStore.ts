@@ -1,58 +1,103 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { tasks as seedTasks } from './appData';
+import type { TeamMatch } from './appData';
 
-export type Lane = 'todo' | 'doing' | 'done';
+/**
+ * The team roster + collaboration state. The task board that used to live here
+ * has moved to its own shared Kanban (see kanbanStore) — this store now owns the
+ * people: who's on the team, who's online, and which voice rooms are joined.
+ * Everything persists so the workspace remembers its team across reloads.
+ */
 
-export interface BoardTask {
+export interface Member {
   id: string;
-  title: string;
-  lane: Lane;
+  name: string;
+  role: string;
+  online: boolean;
 }
 
-export const LANES: { id: Lane; label: string }[] = [
-  { id: 'todo', label: 'Todo' },
-  { id: 'doing', label: 'In progress' },
-  { id: 'done', label: 'Done' },
-];
+export interface VoiceRoom {
+  id: string;
+  name: string;
+  participants: number;
+  live: boolean;
+  joined: boolean;
+}
+
+function seedMembers(): Member[] {
+  return [
+    { id: 'me', name: 'You', role: 'Founder', online: true },
+    { id: 'm-t1', name: 'Naomi Larsson', role: 'Co-founder', online: true },
+    { id: 'm-t3', name: 'Asha Patel', role: 'Developer', online: false },
+  ];
+}
+
+function seedRooms(): VoiceRoom[] {
+  return [
+    { id: 'r1', name: 'Daily standup', participants: 3, live: true, joined: false },
+    { id: 'r2', name: 'Design review', participants: 1, live: false, joined: false },
+    { id: 'r3', name: 'Pair on Stripe webhook', participants: 2, live: true, joined: false },
+  ];
+}
 
 interface TeamState {
-  tasks: BoardTask[];
-  addTask: (title: string, lane?: Lane) => void;
-  moveTask: (id: string, lane: Lane) => void;
-  deleteTask: (id: string) => void;
+  members: Member[];
+  rooms: VoiceRoom[];
+  /** Add a co-founder match to the team. No-op if already present. */
+  addFromMatch: (match: TeamMatch) => void;
+  removeMember: (id: string) => void;
+  toggleOnline: (id: string) => void;
+  /** Join/leave a voice room, adjusting its participant count. */
+  toggleRoom: (id: string) => void;
 }
 
-function seed(): BoardTask[] {
-  const out: BoardTask[] = [];
-  let n = 0;
-  for (const lane of ['todo', 'doing', 'done'] as Lane[]) {
-    for (const title of seedTasks[lane]) {
-      out.push({ id: `seed-${n++}`, title, lane });
-    }
-  }
-  return out;
-}
+/** Stable member id for a given match, so re-adding is idempotent. */
+export const matchMemberId = (matchId: string): string => `m-${matchId}`;
 
 export const useTeam = create<TeamState>()(
   persist(
     (set) => ({
-      tasks: seed(),
-      addTask: (title, lane = 'todo') =>
+      members: seedMembers(),
+      rooms: seedRooms(),
+
+      addFromMatch: (match) =>
         set((state) => {
-          const trimmed = title.trim();
-          if (!trimmed) return state;
-          return {
-            tasks: [...state.tasks, { id: `task-${Date.now()}`, title: trimmed, lane }],
-          };
+          const id = matchMemberId(match.id);
+          if (state.members.some((m) => m.id === id)) return state;
+          const member: Member = { id, name: match.name, role: match.role, online: true };
+          return { members: [...state.members, member] };
         }),
-      moveTask: (id, lane) =>
+
+      removeMember: (id) =>
+        set((state) =>
+          id === 'me'
+            ? state
+            : { members: state.members.filter((m) => m.id !== id) },
+        ),
+
+      toggleOnline: (id) =>
         set((state) => ({
-          tasks: state.tasks.map((t) => (t.id === id ? { ...t, lane } : t)),
+          members: state.members.map((m) =>
+            m.id === id ? { ...m, online: !m.online } : m,
+          ),
         })),
-      deleteTask: (id) =>
-        set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) })),
+
+      toggleRoom: (id) =>
+        set((state) => ({
+          rooms: state.rooms.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  joined: !r.joined,
+                  participants: r.joined
+                    ? Math.max(0, r.participants - 1)
+                    : r.participants + 1,
+                  live: r.joined ? r.live : true,
+                }
+              : r,
+          ),
+        })),
     }),
-    { name: 'forze.team.v1' },
+    { name: 'forze.team.v2' },
   ),
 );
