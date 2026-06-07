@@ -103,42 +103,6 @@ export const socialFormats = [
   'Blog posts',
 ];
 
-export type CommunityPost = {
-  id: string;
-  author: string;
-  handle: string;
-  time: string;
-  body: string;
-  reactions: number;
-  comments: number;
-  tag: 'build-log' | 'showcase' | 'launch' | 'milestone';
-};
-
-export const communityPosts: CommunityPost[] = [
-  { id: 'p1', author: 'Ava Chen', handle: '@ava.builds', time: '6m ago', body: 'Day 12: shipped Stripe checkout. 9 paying customers in week one. Onwards.', reactions: 142, comments: 18, tag: 'milestone' },
-  { id: 'p2', author: 'Marco Reyes', handle: '@marco.dev', time: '24m ago', body: 'Launched Foxtrot on Demo Day — got featured on the homepage. Wild week.', reactions: 312, comments: 47, tag: 'launch' },
-  { id: 'p3', author: 'Priya Nair', handle: '@priya', time: '1h ago', body: 'Built a feedback widget in 38 minutes using the AI Agent. Mind = blown.', reactions: 88, comments: 9, tag: 'build-log' },
-  { id: 'p4', author: 'Diego Park', handle: '@diego', time: '3h ago', body: 'Showcase: pixel-perfect landing page for my B2B SaaS. Roast it.', reactions: 56, comments: 22, tag: 'showcase' },
-];
-
-export const demoDay = {
-  date: 'Friday, May 30',
-  submissions: 42,
-  spotlight: [
-    { rank: 1, name: 'Foxtrot — AI sales coach', votes: 412 },
-    { rank: 2, name: 'Northstar — founder OS', votes: 384 },
-    { rank: 3, name: 'Quill — writer notebook', votes: 312 },
-  ],
-};
-
-export const leaderboard = [
-  { rank: 1, name: 'Ava Chen', rep: 4_124 },
-  { rank: 2, name: 'Marco Reyes', rep: 3_882 },
-  { rank: 3, name: 'Priya Nair', rep: 3_240 },
-  { rank: 4, name: 'Diego Park', rep: 2_910 },
-  { rank: 5, name: 'You', rep: 1_847 },
-];
-
 export type TeamMatch = {
   id: string;
   name: string;
@@ -154,18 +118,6 @@ export const teamMatches: TeamMatch[] = [
   { id: 't3', name: 'Asha Patel', role: 'Developer', skills: ['Next.js', 'Postgres', 'Infra'], availability: 'Open to chat', matchScore: 86 },
   { id: 't4', name: 'Mason Bell', role: 'GTM', skills: ['Content', 'Paid ads', 'Lifecycle'], availability: 'Advisory', matchScore: 78 },
 ];
-
-export const voiceRooms = [
-  { id: 'r1', name: 'Daily standup', participants: 3, live: true },
-  { id: 'r2', name: 'Design review', participants: 1, live: false },
-  { id: 'r3', name: 'Pair on Stripe webhook', participants: 2, live: true },
-];
-
-export const tasks = {
-  todo: ['Wire Stripe webhook signature verification', 'Add empty state to Settings', 'Migrate auth to passkeys'],
-  doing: ['Refactor dashboard stats grid', 'Launch tweet thread'],
-  done: ['Onboarding tooltip pass', 'OG image generator'],
-};
 
 export const achievements = [
   { id: 'first-deploy', label: 'First Deploy', earned: true },
