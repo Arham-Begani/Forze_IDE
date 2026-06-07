@@ -51,10 +51,33 @@ export interface Station {
   runKey: number;
 }
 
+/** A *logical* station address ("Claude Code #1") — an agent + a 1-based ordinal
+ *  among that agent's stations. Resolved to a live {@link Station} at delivery
+ *  time, so it survives reloads and can name a station that doesn't exist yet. */
+export interface StationTarget {
+  agentId: AgentId;
+  ordinal: number;
+}
+
+/** Runtime PTY binding for a station, mirrored out of `VibeTerminal` so the
+ *  prompt scheduler can write to a station's terminal from outside the component.
+ *  `launchedAt` is when the agent-CLI launch keystroke was sent — we treat the
+ *  station as ready to accept a prompt a short grace period after that. */
+export interface StationSession {
+  sessionId: string;
+  launchedAt: number | null;
+}
+
+/** Grace period after the CLI launch keystroke before we consider a station
+ *  ready to receive a typed prompt (the agent REPL needs a moment to boot). */
+export const READY_GRACE_MS = 3500;
+
 interface VibeStationsState {
   stations: Station[];
   /** Number of columns in the grid (1–4). */
   columns: number;
+  /** Runtime-only: stationId → live PTY session. Excluded from persistence. */
+  sessions: Record<string, StationSession>;
 
   addStation: (agentId: AgentId, cwd: string | null) => string;
   /** Replace the grid with a fresh session built from per-agent counts. */
@@ -63,6 +86,11 @@ interface VibeStationsState {
   restartStation: (id: string) => void;
   clearAll: () => void;
   setColumns: (columns: number) => void;
+
+  /** Record (or clear) the live PTY session id for a station. */
+  setStationSession: (stationId: string, sessionId: string | null) => void;
+  /** Mark that the agent-CLI launch keystroke was just sent for a station. */
+  markStationLaunched: (stationId: string) => void;
 }
 
 export const useVibeStations = create<VibeStationsState>()(
@@ -70,6 +98,7 @@ export const useVibeStations = create<VibeStationsState>()(
     (set) => ({
       stations: [],
       columns: 3,
+      sessions: {},
 
       addStation: (agentId, cwd) => {
         const id = crypto.randomUUID();
@@ -92,22 +121,115 @@ export const useVibeStations = create<VibeStationsState>()(
         }),
 
       removeStation: (id) =>
-        set((state) => ({ stations: state.stations.filter((s) => s.id !== id) })),
+        set((state) => {
+          const sessions = { ...state.sessions };
+          delete sessions[id];
+          return { stations: state.stations.filter((s) => s.id !== id), sessions };
+        }),
 
       restartStation: (id) =>
-        set((state) => ({
-          stations: state.stations.map((s) =>
-            s.id === id ? { ...s, runKey: s.runKey + 1 } : s,
-          ),
-        })),
+        set((state) => {
+          // The terminal remounts (runKey bump) and re-registers its session;
+          // drop the stale binding so nothing writes to the dying pty meanwhile.
+          const sessions = { ...state.sessions };
+          delete sessions[id];
+          return {
+            stations: state.stations.map((s) =>
+              s.id === id ? { ...s, runKey: s.runKey + 1 } : s,
+            ),
+            sessions,
+          };
+        }),
 
-      clearAll: () => set({ stations: [] }),
+      clearAll: () => set({ stations: [], sessions: {} }),
 
       setColumns: (columns) => set({ columns: Math.min(4, Math.max(1, columns)) }),
+
+      setStationSession: (stationId, sessionId) =>
+        set((state) => {
+          const sessions = { ...state.sessions };
+          if (sessionId === null) delete sessions[stationId];
+          else sessions[stationId] = { sessionId, launchedAt: null };
+          return { sessions };
+        }),
+
+      markStationLaunched: (stationId) =>
+        set((state) => {
+          const current = state.sessions[stationId];
+          if (!current) return state;
+          return {
+            sessions: { ...state.sessions, [stationId]: { ...current, launchedAt: Date.now() } },
+          };
+        }),
     }),
     {
       name: 'forze.vibeStations.v1',
+      // `sessions` is runtime-only (live pty bindings) — never persist it.
       partialize: (state) => ({ stations: state.stations, columns: state.columns }),
     },
   ),
 );
+
+// ---- station addressing helpers ("Claude Code #1") ----
+
+/** 1-based position of `station` among stations sharing its agent, in grid order. */
+export function stationOrdinal(stations: Station[], station: Station): number {
+  let n = 0;
+  for (const s of stations) {
+    if (s.agentId === station.agentId) {
+      n++;
+      if (s.id === station.id) return n;
+    }
+  }
+  return n;
+}
+
+/** Human label for a logical target, e.g. `"Claude Code #1"`. */
+export function targetLabel(target: StationTarget): string {
+  return `${agentDef(target.agentId).label} #${target.ordinal}`;
+}
+
+/** Resolve a logical target to the live station now occupying that slot. */
+export function resolveTarget(stations: Station[], target: StationTarget): Station | null {
+  const ofAgent = stations.filter((s) => s.agentId === target.agentId);
+  return ofAgent[target.ordinal - 1] ?? null;
+}
+
+/** Is the station's terminal up and likely ready to accept a typed prompt? */
+export function stationReady(
+  sessions: Record<string, StationSession>,
+  stationId: string,
+): boolean {
+  const sess = sessions[stationId];
+  return (
+    !!sess && sess.launchedAt !== null && Date.now() - sess.launchedAt > READY_GRACE_MS
+  );
+}
+
+/** Tolerant agent matcher: maps free text ("claude code", "cc", "agy") to an AgentId. */
+function matchAgentId(text: string): AgentId | null {
+  const t = text.toLowerCase();
+  if (/\bclaude\b|\bcc\b|claude code/.test(t)) return 'claude';
+  if (/\bcodex\b/.test(t)) return 'codex';
+  if (/antigravity|\bagy\b/.test(t)) return 'antigravity';
+  if (/opencode|open code/.test(t)) return 'opencode';
+  return null;
+}
+
+/** Parse a free-text station label ("Claude Code #1", "codex 2") into a target.
+ *  Defaults the ordinal to 1 when none is given. Returns null if no agent matches. */
+export function parseStationLabel(text: string): StationTarget | null {
+  const agentId = matchAgentId(text);
+  if (!agentId) return null;
+  const num = /#?\s*(\d{1,2})\b/.exec(text);
+  const ordinal = num ? Math.max(1, parseInt(num[1]!, 10)) : 1;
+  return { agentId, ordinal };
+}
+
+/** Model-facing bullet list of the stations currently open (for the assistant). */
+export function stationManifest(stations: Station[]): string {
+  if (stations.length === 0) return '(none open right now)';
+  return stations
+    .map((s) => `- "${targetLabel({ agentId: s.agentId, ordinal: stationOrdinal(stations, s) })}"`)
+    .join('\n');
+}
