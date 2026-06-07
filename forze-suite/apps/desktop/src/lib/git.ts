@@ -45,12 +45,35 @@ export function commit(cwd: string, message: string): Promise<string> {
   return invokeCommand<string>('git_commit', { cwd, message });
 }
 
+export interface GitCommit {
+  hash: string;
+  short: string;
+  author: string;
+  /** ISO-8601 author date. */
+  date: string;
+  subject: string;
+  body: string;
+}
+
+/** The most recent commits on HEAD, newest first (clamped to 1–100). */
+export function log(cwd: string, limit = 10): Promise<GitCommit[]> {
+  return invokeCommand<GitCommit[]>('git_log', { cwd, limit });
+}
+
 export function diffFile(
   cwd: string,
   path: string,
   staged: boolean,
 ): Promise<string> {
   return invokeCommand<string>('git_diff_file', { cwd, path, staged });
+}
+
+/**
+ * The full staged diff (`git diff --cached`) — the exact set of changes a commit
+ * will record. Backs the pre-commit security review (Commit Guard).
+ */
+export function diffStaged(cwd: string): Promise<string> {
+  return invokeCommand<string>('git_diff_staged', { cwd });
 }
 
 /**
