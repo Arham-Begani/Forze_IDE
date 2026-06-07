@@ -15,6 +15,7 @@ import {
   repoRoot as gitRepoRoot,
   status as gitStatus,
 } from '../lib/git';
+import { noteChange } from './commitGuard';
 import { useProject } from './projectStore';
 import { useWorkbench } from './store';
 
@@ -121,9 +122,15 @@ export async function saveActiveTab(currentValue: string | null): Promise<void> 
   const tab = workbench.editorTabs.find((t) => t.id === activeId);
   if (!tab || !tab.filePath || currentValue === null) return;
 
+  // Only count a save toward auto-commit when the contents actually changed —
+  // a reflexive Ctrl+S on an unchanged buffer shouldn't burn a "change".
+  const changed = project.getBuffer(tab.filePath) !== currentValue;
+
   await writeFile(tab.filePath, currentValue);
   project.setBuffer(tab.filePath, currentValue);
   workbench.markTabDirty(tab.id, false);
+
+  if (changed) void noteChange();
 }
 
 /** True when `child` is the same path as, or nested under, `parent`. */
