@@ -14,6 +14,8 @@ import type { StackTraceLine } from '@forze/shared/diagnostics';
 
 export interface EditorHandle {
   insertAtCursor: (snippet: string) => void;
+  /** Focus the editor and select its entire contents (Edit ▸ Select All). */
+  selectAll: () => void;
   markDiagnostic: (trace: StackTraceLine) => void;
   clearDiagnostics: () => void;
   getValue: () => string;
@@ -103,6 +105,12 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
             const caret = start + snippet.length;
             ta.setSelectionRange(caret, caret);
           });
+        },
+        selectAll: () => {
+          const ta = taRef.current;
+          if (!ta) return;
+          ta.focus();
+          ta.select();
         },
         markDiagnostic: (trace: StackTraceLine) => {
           setErrorLines((prev) => {
