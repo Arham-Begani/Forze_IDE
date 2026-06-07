@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus, RotateCw, SquareTerminal, Trash2, X } from 'lucide-react';
 import VibeTerminal from '../../panels/VibeTerminal';
+import ScheduledPromptsPanel from './ScheduledPromptsPanel';
 import { useProject } from '../../workbench/projectStore';
 import {
   AGENTS,
@@ -92,6 +93,8 @@ export default function VibeStationsPage(): JSX.Element {
           </div>
         )}
       </div>
+
+      <ScheduledPromptsPanel />
     </div>
   );
 }
@@ -126,6 +129,7 @@ function StationCard({
         {/* `runKey` in the React key forces a clean remount on restart. */}
         <VibeTerminal
           key={station.runKey}
+          stationId={station.id}
           cwd={station.cwd}
           launchCommand={def.command}
         />
