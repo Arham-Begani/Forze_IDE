@@ -11,6 +11,7 @@ import {
   writePty,
 } from '../lib/pty';
 import { useTheme } from '../theme/themeStore';
+import { useVibeStations } from '../workbench/vibeStationsStore';
 import { xtermThemeFor } from './XtermView';
 
 /** xterm always reports ≥1 after a successful fit; guard against a stray 0. */
@@ -56,9 +57,13 @@ function enqueueAgentLaunch(run: () => void): void {
  * on unmount and a fresh shell + agent spins up.
  */
 export default function VibeTerminal({
+  stationId,
   cwd,
   launchCommand,
 }: {
+  /** Owning station id — used to mirror this terminal's pty session into the
+   *  store so the prompt scheduler can write to it from outside the component. */
+  stationId: string;
   cwd: string | null;
   launchCommand?: string;
 }): JSX.Element {
@@ -102,6 +107,7 @@ export default function VibeTerminal({
       try {
         await initialiseTerminal(
           container,
+          stationId,
           cwd,
           launchCommand,
           termRef,
@@ -176,11 +182,14 @@ export default function VibeTerminal({
   useEffect(() => {
     return () => {
       disposedRef.current = true;
+      // Drop the store's pty binding so the scheduler never writes to a dead pty.
+      useVibeStations.getState().setStationSession(stationId, null);
       const ptyId = ptyIdRef.current;
       if (ptyId) void killPty(ptyId).catch(() => undefined);
       termRef.current?.dispose();
       termRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -213,6 +222,7 @@ export default function VibeTerminal({
 
 async function initialiseTerminal(
   container: HTMLDivElement,
+  stationId: string,
   cwd: string | null,
   launchCommand: string | undefined,
   termRef: React.MutableRefObject<Terminal | null>,
@@ -282,6 +292,9 @@ async function initialiseTerminal(
       const liveId = ptyIdRef.current;
       if (!liveId) return;
       void writePty(liveId, `${launchCommand}\r`).catch(() => undefined);
+      // The agent CLI is now booting — mark the station ready-able (the
+      // scheduler waits READY_GRACE_MS past this before typing a prompt).
+      useVibeStations.getState().markStationLaunched(stationId);
     });
   };
 
@@ -337,6 +350,9 @@ async function initialiseTerminal(
     return;
   }
   ptyIdRef.current = ptyId;
+  // Mirror the live session into the store so the prompt scheduler can address
+  // this station's terminal. `launchedAt` stays null until the CLI launch fires.
+  useVibeStations.getState().setStationSession(stationId, ptyId);
 
   // Re-assert the exact size (the backend floors spawn dimensions).
   const { cols, rows } = dims(term);
