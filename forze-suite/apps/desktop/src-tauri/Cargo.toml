@@ -26,6 +26,11 @@ uuid = { version = "1", features = ["v4"] }
 parking_lot = "0.12"
 sha1 = "0.10"
 base64 = "0.22"
+# Already in the tree via tauri-plugin-http; declared directly so the LinkedIn
+# OAuth token exchange can run in Rust (keeps the client secret out of the
+# webview bundle). Default features use the OS TLS stack (SChannel on Windows),
+# so no OpenSSL toolchain is required.
+reqwest = { version = "0.12", features = ["json"] }
 
 [features]
 default = ["custom-protocol"]
