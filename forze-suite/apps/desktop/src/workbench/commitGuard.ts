@@ -1,14 +1,17 @@
 /**
- * Commit Guard — the logic behind the two toggles in Source Control:
+ * Commit Guard — the logic behind Source Control's auto-commit and the
+ * always-on pre-commit security review:
  *
- *  1. Auto-commit: `noteChange()` is called on every saved change. Once the
- *     pending counter reaches the threshold it stages everything, runs the
- *     security review, writes a commit message (AI when a provider is ready,
- *     deterministic otherwise) and commits.
+ *  1. Auto-commit (opt-in toggle): `noteChange()` is called on every saved
+ *     change. Once the pending counter reaches the threshold it stages
+ *     everything, runs the security review, writes a commit message (AI when a
+ *     provider is ready, deterministic otherwise) and commits.
  *
- *  2. Security review: `guardedCommit()` wraps *every* commit (manual ones from
- *     the SCM panel and auto ones alike). It scans the newly-added lines of the
- *     staged diff and refuses to commit when a high-confidence secret is found.
+ *  2. Security review (always on): `guardedCommit()` wraps *every* commit
+ *     (manual ones from the SCM panel and auto ones alike). It scans the
+ *     newly-added lines of the staged diff and refuses to commit when a
+ *     high-confidence secret is found. It's a local, instant safety gate with
+ *     no toggle — you can't accidentally turn off secret protection.
  *
  * These are plain functions (not hooks) driven off `getState()` so they can run
  * from anywhere — the save action, the SCM panel, a command.
@@ -33,6 +36,16 @@ function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Whether we've already surfaced the *current* secret block. An auto-commit
+ * that's paused by a secret keeps its `pending` counter so the very next save
+ * retries — but without this latch every one of those retries would re-toast
+ * and yank the user back to the Security panel. We notify once on the leading
+ * edge and clear the latch the moment a review comes back clean or a commit
+ * lands (both happen inside `review()` / the success paths below).
+ */
+let blockNoticeShown = false;
+
 /** Run the security review over a staged diff, store it, and return the result. */
 function review(diff: string): ReviewResult {
   const findings = scanDiff(diff);
@@ -42,6 +55,9 @@ function review(diff: string): ReviewResult {
     findings,
     blocked: blockers.length > 0,
   };
+  // A clean (non-blocking) review means whatever secret previously paused an
+  // auto-commit is gone — reset the latch so the next block notifies again.
+  if (!result.blocked) blockNoticeShown = false;
   // Always record it (even when clean) so the SCM/Security panels can show a
   // "last review: clean" state, not just failures.
   useCommitGuard.getState().setLastReview(result);
@@ -65,9 +81,9 @@ export interface GuardOutcome {
 }
 
 /**
- * Commit `cwd` with `message`, gating on the security review when the toggle is
- * on. The caller is responsible for having staged what should be committed.
- * Pass `prefetchedDiff` to avoid re-running `git diff --cached`.
+ * Commit `cwd` with `message` through the always-on security review. The caller
+ * is responsible for having staged what should be committed. Pass
+ * `prefetchedDiff` to avoid re-running `git diff --cached`.
  */
 export async function guardedCommit(
   cwd: string,
@@ -76,28 +92,20 @@ export async function guardedCommit(
 ): Promise<GuardOutcome> {
   const guard = useCommitGuard.getState();
 
-  if (guard.securityReviewEnabled) {
-    const diff = prefetchedDiff ?? (await diffStaged(cwd));
-    const result = review(diff);
-    if (result.blocked) {
-      const { blockers } = partitionFindings(result.findings);
-      return {
-        committed: false,
-        blocked: true,
-        findings: result.findings,
-        message: `${blockers.length} secret${blockers.length > 1 ? 's' : ''} detected — commit blocked.`,
-      };
-    }
-    const hash = await gitCommit(cwd, message);
-    guard.resetPending(); // a commit happened — restart the auto-commit countdown
-    return { committed: true, blocked: false, hash, findings: result.findings };
+  const diff = prefetchedDiff ?? (await diffStaged(cwd));
+  const result = review(diff);
+  if (result.blocked) {
+    const { blockers } = partitionFindings(result.findings);
+    return {
+      committed: false,
+      blocked: true,
+      findings: result.findings,
+      message: `${blockers.length} secret${blockers.length > 1 ? 's' : ''} detected — commit blocked.`,
+    };
   }
-
-  // Review off: clear any stale finding and commit straight through.
-  guard.setLastReview(null);
   const hash = await gitCommit(cwd, message);
-  guard.resetPending();
-  return { committed: true, blocked: false, hash, findings: [] };
+  guard.resetPending(); // a commit happened — restart the auto-commit countdown
+  return { committed: true, blocked: false, hash, findings: result.findings };
 }
 
 /**
@@ -139,18 +147,22 @@ export async function autoCommit(): Promise<void> {
     }
 
     // Review first (local + instant) so we never spend an AI call on a diff
-    // we're about to reject.
-    if (guard.securityReviewEnabled) {
-      const result = review(diff);
-      if (result.blocked) {
-        const { blockers } = partitionFindings(result.findings);
+    // we're about to reject. The secret gate is always on.
+    const result = review(diff);
+    if (result.blocked) {
+      const { blockers } = partitionFindings(result.findings);
+      // Notify once on the leading edge — keep `pending` so the next save
+      // retries automatically the moment the secret is removed, but don't
+      // re-toast / re-navigate on every save while it's still there.
+      if (!blockNoticeShown) {
+        blockNoticeShown = true;
         toast(
           `Auto-commit paused — ${blockers.length} secret${blockers.length > 1 ? 's' : ''} detected. See Security.`,
           'error',
         );
         useWorkbench.getState().setActiveActivity('security');
-        return; // keep `pending` so the next save retries
       }
+      return; // keep `pending` so the next save retries
     }
 
     const report = await gitStatus(workspaceRoot).catch(() => null);
