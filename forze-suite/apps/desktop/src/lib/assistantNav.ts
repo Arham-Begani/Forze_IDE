@@ -51,10 +51,10 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     run: () => wb().openPage('deployments'),
   },
   {
-    id: 'ad-studio',
-    label: 'Ad Studio',
-    blurb: 'Ad creative and campaigns, plus build-in-public posts to LinkedIn — draft from your commits, post now or schedule.',
-    run: () => wb().openPage('ad-studio'),
+    id: 'build-in-public',
+    label: 'Build in Public',
+    blurb: 'Draft build-in-public posts to LinkedIn from your commits — post now or schedule.',
+    run: () => wb().openPage('build-in-public'),
   },
   {
     id: 'vibe-stations',
@@ -145,4 +145,4 @@ export function navManifest(): string {
 }
 
 /** A handful of high-value destinations surfaced as quick chips in the UI. */
-export const QUICK_DESTINATIONS = ['agent-manager', 'ad-studio', 'vibe', 'settings'];
+export const QUICK_DESTINATIONS = ['agent-manager', 'build-in-public', 'vibe', 'settings'];
