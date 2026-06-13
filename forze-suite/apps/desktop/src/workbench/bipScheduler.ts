@@ -37,7 +37,7 @@ async function tick(): Promise<void> {
     // it retries automatically on the next tick once the user reconnects.
     if (!linkedinConnected()) {
       state.markStatus(post.id, 'queued', {
-        lastError: 'Waiting on LinkedIn connection — reconnect in Ad Studio.',
+        lastError: 'Waiting on LinkedIn connection — reconnect in Build in Public.',
       });
       continue;
     }
