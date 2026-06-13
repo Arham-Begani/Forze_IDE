@@ -15,8 +15,6 @@ export interface ReviewResult {
 interface CommitGuardState {
   /** Auto-commit: stage + commit automatically once `pending` hits `threshold`. */
   autoCommitEnabled: boolean;
-  /** Security review: scan the staged diff before every commit. */
-  securityReviewEnabled: boolean;
   /** How many saved changes trigger an auto-commit. */
   threshold: number;
   /** Saved changes accumulated since the last commit. */
@@ -27,7 +25,6 @@ interface CommitGuardState {
   busy: boolean;
 
   setAutoCommit: (on: boolean) => void;
-  setSecurityReview: (on: boolean) => void;
   setThreshold: (n: number) => void;
   /** Increment the pending counter and return the new value. */
   incrementPending: () => number;
@@ -40,14 +37,12 @@ export const useCommitGuard = create<CommitGuardState>()(
   persist(
     (set, get) => ({
       autoCommitEnabled: false,
-      securityReviewEnabled: true,
       threshold: 10,
       pending: 0,
       lastReview: null,
       busy: false,
 
       setAutoCommit: (autoCommitEnabled) => set({ autoCommitEnabled }),
-      setSecurityReview: (securityReviewEnabled) => set({ securityReviewEnabled }),
       setThreshold: (n) =>
         set({ threshold: Math.min(100, Math.max(1, Math.round(n) || 1)) }),
       incrementPending: () => {
@@ -61,12 +56,12 @@ export const useCommitGuard = create<CommitGuardState>()(
     }),
     {
       name: 'forze.commitGuard.v1',
-      // Persist the user's toggles, threshold and the running counter (so a
+      // Persist the auto-commit toggle, threshold and the running counter (so a
       // reload doesn't silently reset progress toward the next auto-commit).
-      // Never persist the transient `busy` flag or the last review payload.
+      // Never persist the transient `busy` flag or the last review payload. The
+      // pre-commit security review is always on, so there's no toggle to persist.
       partialize: (s) => ({
         autoCommitEnabled: s.autoCommitEnabled,
-        securityReviewEnabled: s.securityReviewEnabled,
         threshold: s.threshold,
         pending: s.pending,
       }),
