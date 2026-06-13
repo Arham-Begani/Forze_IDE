@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useWorkbench } from '../workbench/store';
 import { useProject } from '../workbench/projectStore';
 import { commands } from '../workbench/commands';
+import { showModal } from './modal';
 import { basename } from '../lib/fs';
 
 interface TitleBarProps {
@@ -106,8 +107,18 @@ function buildMenus(onSelectAll: () => void): Menu[] {
         {
           label: 'About Forze IDE',
           run: () =>
-            // eslint-disable-next-line no-alert
-            window.alert('Forze IDE 0.1.0\nThe Sovereign OS for Startup Founders.'),
+            showModal({
+              title: 'About Forze IDE',
+              body: (
+                <div className="about-modal">
+                  <div className="about-modal__name">Forze IDE</div>
+                  <div className="about-modal__version">Version 0.1.0</div>
+                  <p className="about-modal__tagline">
+                    The Sovereign OS for Startup Founders.
+                  </p>
+                </div>
+              ),
+            }),
         },
       ],
     },
