@@ -29,7 +29,7 @@ interface IntegrationsState {
   setVercelTeamId: (teamId: string) => void;
   setVercelProjectId: (projectId: string) => void;
 
-  // ---- LinkedIn publishing (Ad Studio "Build in Public") ----
+  // ---- LinkedIn publishing (Build in Public) ----
   /** OAuth2 access token from the "Log in with LinkedIn" flow. */
   linkedinToken: string;
   /** Cached author URN (`urn:li:person:…`) resolved from the token. */
