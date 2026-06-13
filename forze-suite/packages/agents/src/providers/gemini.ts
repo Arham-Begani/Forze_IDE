@@ -184,7 +184,16 @@ export async function generateVision(options: VisionOptions): Promise<string> {
         ],
       },
     ],
-    generationConfig: { maxOutputTokens: options.maxTokens ?? 4096 },
+    // Gemini 3.x Pro is a *thinking* model: reasoning tokens are billed against
+    // maxOutputTokens. With a tight cap and default thinking, the model can burn
+    // the whole budget reasoning and return a 200 with finishReason=MAX_TOKENS
+    // and zero text parts — which reads to the caller as "no content for the
+    // image". Keep thinking low and floor the budget so there's always room to
+    // emit the actual JSX after it reasons (mirrors the streaming path).
+    generationConfig: {
+      maxOutputTokens: Math.max(options.maxTokens ?? 4096, 8192),
+      thinkingConfig: { thinkingLevel: 'low' },
+    },
   };
 
   const response = await fetch(url, {
@@ -200,19 +209,39 @@ export async function generateVision(options: VisionOptions): Promise<string> {
   }
 
   const json = (await response.json()) as GeminiGenerateResponse;
-  const parts = json.candidates?.[0]?.content?.parts ?? [];
+  const candidate = json.candidates?.[0];
+  const parts = candidate?.content?.parts ?? [];
   const text = parts
     .map((p) => p.text ?? '')
     .join('')
     .trim();
-  if (!text) throw new Error('Gemini returned no content for the image.');
+  if (!text) {
+    // Distinguish the common failure modes so the caller can show something
+    // actionable rather than a flat "no content".
+    const reason = candidate?.finishReason;
+    if (reason === 'MAX_TOKENS') {
+      throw new Error(
+        'Gemini hit the output-token limit before producing any text — raise maxTokens.',
+      );
+    }
+    if (reason && reason !== 'STOP') {
+      throw new Error(`Gemini produced no text for the image (finishReason: ${reason}).`);
+    }
+    const blockReason = json.promptFeedback?.blockReason;
+    if (blockReason) {
+      throw new Error(`Gemini blocked the image (${blockReason}).`);
+    }
+    throw new Error('Gemini returned no content for the image.');
+  }
   return text;
 }
 
 interface GeminiGenerateResponse {
   candidates?: Array<{
     content?: { parts?: Array<{ text?: string }> };
+    finishReason?: string;
   }>;
+  promptFeedback?: { blockReason?: string };
 }
 
 interface GeminiStreamEvent {
