@@ -4,8 +4,8 @@
  * place means "what the panel flags" and "what blocks a commit" can never drift.
  *
  * Severity:
- *  - `block` → a high-confidence credential leak. Blocks a commit when the
- *    Security Review toggle is on.
+ *  - `block` → a high-confidence credential leak. The always-on pre-commit
+ *    security review refuses the commit when one appears in the staged diff.
  *  - `warn`  → a risky pattern or a heuristic match. Surfaced, but never blocks
  *    (these have real false-positive rates, so they only advise).
  */
