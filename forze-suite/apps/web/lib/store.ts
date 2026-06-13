@@ -13,7 +13,6 @@ export type ActivityId =
   | 'agent'
   | 'preview'
   | 'deployments'
-  | 'ad-studio'
   | 'analytics'
   | 'database'
   | 'team'
