@@ -38,6 +38,7 @@ import { startTeamSync } from './workbench/teamSync';
 import { computeSurvivalScore } from './workbench/survivalScore';
 import { useKeybindings, keybindingHint } from './workbench/keybindings';
 import { pickFolder } from './lib/dialog';
+import { checkForUpdates } from './lib/updater';
 import { subscribeToDevServerLogs } from './lib/tauri';
 import { parseStackTraceLine } from '@forze/shared/diagnostics';
 
@@ -105,6 +106,11 @@ export default function App(): JSX.Element {
       console.warn('[forze] openWorkspace on boot failed', err);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // Fire-and-forget on startup; no-op outside the Tauri shell.
+    void checkForUpdates();
   }, []);
 
   useEffect(() => {
