@@ -19,7 +19,6 @@ import {
   type GitStatusEntry,
 } from '../lib/git';
 import { partitionFindings } from '../lib/diffScan';
-import type { SecretFinding } from '../lib/secretRules';
 import { basename, dirname, joinPath } from '../lib/fs';
 import { openFile } from '../workbench/actions';
 import { guardedCommit, reviewStaged } from '../workbench/commitGuard';
@@ -90,7 +89,7 @@ export default function SourceControlView(): JSX.Element {
     if (!workspaceRoot || !message.trim() || !hasStaged) return;
     setBusy(true);
     try {
-      // Routes through the Security Review gate when the toggle is on.
+      // Always routes through the security review gate.
       const outcome = await guardedCommit(workspaceRoot, message.trim());
       if (outcome.blocked) {
         const why = outcome.message ?? 'Commit blocked by security review.';
@@ -313,8 +312,9 @@ function ChangeGroup({
 }
 
 /**
- * Commit Guard controls: the Auto-commit and Security review toggles, the
- * progress toward the next auto-commit, and a summary of the last review.
+ * Commit Guard controls: the Auto-commit toggle and the progress toward the
+ * next auto-commit, plus the always-on security review (last-review summary and
+ * an on-demand "Review staged" action).
  */
 function CommitGuardPanel({
   workspaceRoot,
@@ -324,13 +324,11 @@ function CommitGuardPanel({
   hasStaged: boolean;
 }): JSX.Element {
   const autoCommit = useCommitGuard((s) => s.autoCommitEnabled);
-  const securityReview = useCommitGuard((s) => s.securityReviewEnabled);
   const threshold = useCommitGuard((s) => s.threshold);
   const pending = useCommitGuard((s) => s.pending);
   const busy = useCommitGuard((s) => s.busy);
   const lastReview = useCommitGuard((s) => s.lastReview);
   const setAutoCommit = useCommitGuard((s) => s.setAutoCommit);
-  const setSecurityReview = useCommitGuard((s) => s.setSecurityReview);
   const setThreshold = useCommitGuard((s) => s.setThreshold);
 
   const [reviewing, setReviewing] = useState(false);
@@ -396,28 +394,24 @@ function CommitGuardPanel({
         <span className="scm__guard-label">
           <ShieldCheck size={12} strokeWidth={2} />
           Security review
+          <span className="scm__guard-always" title="The staged diff is scanned for leaked secrets before every commit. This can't be turned off.">
+            always on
+          </span>
         </span>
-        <ToggleSwitch
-          checked={securityReview}
-          onChange={setSecurityReview}
-          label="Scan the staged diff for leaked secrets before committing"
-        />
       </div>
-      {securityReview && (
-        <div className="scm__guard-detail">
-          <ReviewSummary lastReview={lastReview} />
-          <button
-            type="button"
-            className="scm__guard-review"
-            onClick={runReview}
-            disabled={!hasStaged || reviewing}
-            title={hasStaged ? 'Scan the staged diff now' : 'Stage changes to review'}
-          >
-            {reviewing ? <Loader2 size={11} className="spin" /> : <ShieldCheck size={11} />}
-            {reviewing ? 'Reviewing…' : 'Review staged'}
-          </button>
-        </div>
-      )}
+      <div className="scm__guard-detail">
+        <ReviewSummary lastReview={lastReview} />
+        <button
+          type="button"
+          className="scm__guard-review"
+          onClick={runReview}
+          disabled={!hasStaged || reviewing}
+          title={hasStaged ? 'Scan the staged diff now' : 'Stage changes to review'}
+        >
+          {reviewing ? <Loader2 size={11} className="spin" /> : <ShieldCheck size={11} />}
+          {reviewing ? 'Reviewing…' : 'Review staged'}
+        </button>
+      </div>
     </section>
   );
 }
