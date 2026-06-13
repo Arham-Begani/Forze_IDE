@@ -4,8 +4,8 @@ import {
   Boxes,
   Files,
   GitBranch,
+  Hammer,
   LayoutDashboard,
-  Megaphone,
   MessagesSquare,
   Rocket,
   Search,
@@ -36,7 +36,7 @@ const AgentManagerPage = lazy(() => import('../views/pages/AgentManagerPage'));
 const DashboardPage = lazy(() => import('../views/pages/DashboardPage'));
 const AnalyticsPage = lazy(() => import('../views/pages/AnalyticsPage'));
 const DeploymentsPage = lazy(() => import('../views/pages/DeploymentsPage'));
-const AdStudioPage = lazy(() => import('../views/pages/AdStudioPage'));
+const BuildInPublicPage = lazy(() => import('../views/pages/BuildInPublicPage'));
 const VibeStationsPage = lazy(() => import('../views/pages/VibeStationsPage'));
 const CommunityPage = lazy(() => import('../views/pages/CommunityPage'));
 const TeamPage = lazy(() => import('../views/pages/TeamPage'));
@@ -68,7 +68,7 @@ export const PANELS: Record<ActivityId, PanelDef> = {
   dashboard: { id: 'dashboard', title: 'Dashboard', icon: LayoutDashboard, group: 'skill', render: () => <DashboardPage /> },
   analytics: { id: 'analytics', title: 'Analytics', icon: Activity, group: 'skill', render: () => <AnalyticsPage /> },
   deployments: { id: 'deployments', title: 'Deployments', icon: Rocket, group: 'skill', render: () => <DeploymentsPage /> },
-  'ad-studio': { id: 'ad-studio', title: 'Ad Studio', icon: Megaphone, group: 'skill', render: () => <AdStudioPage /> },
+  'build-in-public': { id: 'build-in-public', title: 'Build in Public', icon: Hammer, group: 'skill', render: () => <BuildInPublicPage /> },
   'vibe-stations': { id: 'vibe-stations', title: 'Vibe Stations', icon: SquareTerminal, group: 'skill', render: () => <VibeStationsPage /> },
   community: { id: 'community', title: 'Community', icon: MessagesSquare, group: 'skill', render: () => <CommunityPage /> },
   team: { id: 'team', title: 'Team', icon: Users, group: 'skill', render: () => <TeamPage /> },
