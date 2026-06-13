@@ -22,16 +22,15 @@ import {
   Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ROLE_LIST, ROLES, type AgentRoleId } from '../../lib/orchestrator';
 import {
-  ROLE_LIST,
-  ROLES,
-  planMission,
-  runAgent,
-  runPool,
-  synthesizeMission,
-  type AgentRoleId,
-} from '../../lib/orchestrator';
+  abortAgent,
+  abortAllAgents,
+  runAgentById,
+  runMission,
+} from '../../lib/missionRunner';
+import { missionKanbanBridge } from '../../lib/missionKanbanBridge';
 import { activeProvider } from '../../lib/ai';
 import {
   useAgentManager,
@@ -77,12 +76,7 @@ export default function AgentManagerPage(): JSX.Element {
   const agents = useAgentManager((s) => s.agents);
   const missions = useAgentManager((s) => s.missions);
   const activeAgentId = useAgentManager((s) => s.activeAgentId);
-  const createMission = useAgentManager((s) => s.createMission);
-  const updateMission = useAgentManager((s) => s.updateMission);
   const spawnAgent = useAgentManager((s) => s.spawnAgent);
-  const setAgentStatus = useAgentManager((s) => s.setAgentStatus);
-  const appendAgentOutput = useAgentManager((s) => s.appendAgentOutput);
-  const resetAgentOutput = useAgentManager((s) => s.resetAgentOutput);
   const setActiveAgent = useAgentManager((s) => s.setActiveAgent);
   const removeAgent = useAgentManager((s) => s.removeAgent);
   const clearAll = useAgentManager((s) => s.clearAll);
@@ -92,11 +86,12 @@ export default function AgentManagerPage(): JSX.Element {
   const workspaceRoot = useProject((s) => s.workspaceRoot);
   const [goal, setGoal] = useState('');
   const [model, setModel] = useState<string>(() => provider?.models[0]?.id ?? '');
-  const [planning, setPlanning] = useState(false);
   const [spawnRole, setSpawnRole] = useState<AgentRoleId | null>(null);
 
-  // One AbortController per running agent — never persisted.
-  const controllers = useRef(new Map<string, AbortController>());
+  // "Planning" is the window between a goal being submitted and its agents being
+  // spawned — derived from the mission status the runner maintains, so it stays
+  // correct whether the mission was launched here or by the Assistant.
+  const planning = useMemo(() => missions.some((m) => m.status === 'planning'), [missions]);
 
   const activeModel = model || provider?.models[0]?.id;
 
@@ -115,148 +110,20 @@ export default function AgentManagerPage(): JSX.Element {
   const busy = stats.working > 0 || planning;
 
   // ---- Engine wiring -------------------------------------------------------
+  // The mission engine lives in lib/missionRunner so the Assistant can drive it
+  // too; this page is just one caller. Launches mirror onto the Kanban so every
+  // Architect plan shows up on the board and tracks live.
 
-  const runOne = useCallback(
-    async (agentId: string, followUp?: string, missionBrief?: string) => {
-      const current = useAgentManager.getState().agents.find((a) => a.id === agentId);
-      if (!current) return;
-
-      const controller = new AbortController();
-      controllers.current.set(agentId, controller);
-      const priorOutput = current.output;
-
-      if (followUp) {
-        appendAgentOutput(agentId, `\n\n---\n**Follow-up:** ${followUp}\n\n`);
-      } else {
-        resetAgentOutput(agentId);
-      }
-      setAgentStatus(agentId, 'thinking');
-
-      try {
-        // We stream output via onDelta, but also keep the returned summary: some
-        // providers can finish with no streamed text (empty/blocked candidates),
-        // which would otherwise leave a "done" agent with an empty panel.
-        const summary = await runAgent(
-          {
-            role: current.roleId,
-            task: current.task,
-            model: current.model ?? activeModel,
-            priorOutput: followUp ? priorOutput : undefined,
-            followUp,
-            missionBrief,
-          },
-          {
-            signal: controller.signal,
-            onDelta: (delta) => appendAgentOutput(agentId, delta),
-          },
-        );
-        const streamed = useAgentManager.getState().agents.find((a) => a.id === agentId)?.output ?? '';
-        if (!streamed.trim()) {
-          appendAgentOutput(
-            agentId,
-            summary.trim() ||
-              '_The model returned an empty response — it may have been rate-limited or ' +
-                'filtered. Try **Re-run**, rephrase the task, or switch models._',
-          );
-        }
-        setAgentStatus(agentId, 'done');
-      } catch (err) {
-        if ((err as Error).name === 'AbortError') {
-          setAgentStatus(agentId, 'stopped');
-        } else {
-          const message = err instanceof Error ? err.message : String(err);
-          setAgentStatus(agentId, 'error', message);
-          toast(message, 'error');
-        }
-      } finally {
-        controllers.current.delete(agentId);
-      }
-    },
-    [activeModel, appendAgentOutput, resetAgentOutput, setAgentStatus],
-  );
-
-  const launchMission = useCallback(async () => {
+  const launchMission = useCallback(() => {
     const trimmed = goal.trim();
     if (!trimmed || busy) return;
     if (!provider) {
       toast('Connect an AI model in Settings to delegate work.', 'error');
       return;
     }
-
-    const missionId = createMission(trimmed);
-    setPlanning(true);
-    try {
-      const plan = await planMission(trimmed, { model: activeModel });
-      updateMission(missionId, { summary: plan.summary, status: 'running' });
-
-      // Shared brief so each worker knows the whole mission and stays in its lane
-      // instead of duplicating or contradicting its siblings.
-      const brief =
-        `Overall goal: ${trimmed}\n` +
-        `Architect's plan: ${plan.summary}\n` +
-        `The full team and their tasks:\n` +
-        plan.tasks
-          .map((t, i) => `  ${i + 1}. [${ROLES[t.role].label}] ${t.title}`)
-          .join('\n') +
-        `\nDo only your assigned task; trust your teammates to handle theirs.`;
-
-      const ids = plan.tasks.map((task) =>
-        spawnAgent({
-          roleId: task.role,
-          title: task.title,
-          task: task.task,
-          missionId,
-          model: activeModel,
-          status: 'queued',
-        }),
-      );
-      setGoal('');
-      setActiveAgent(ids[0] ?? null);
-      setPlanning(false);
-
-      await runPool(ids, 3, (id) => runOne(id, undefined, brief));
-
-      // Orchestration close-out: the Architect consolidates every agent's output
-      // into one mission report rather than leaving disconnected answers behind.
-      try {
-        const finished = useAgentManager
-          .getState()
-          .agents.filter((a) => ids.includes(a.id));
-        const report = await synthesizeMission(
-          trimmed,
-          plan.summary,
-          finished.map((a) => ({
-            title: a.title,
-            role: a.roleId,
-            status: a.status,
-            output: a.output,
-          })),
-          { model: activeModel },
-        );
-        updateMission(missionId, { status: 'done', report });
-      } catch {
-        updateMission(missionId, { status: 'done' });
-      }
-      toast(`Mission complete — ${ids.length} agents finished.`, 'success');
-    } catch (err) {
-      setPlanning(false);
-      updateMission(missionId, { status: 'error' });
-      if ((err as Error).name !== 'AbortError') {
-        const message = err instanceof Error ? err.message : String(err);
-        toast(`Planning failed: ${message}`, 'error');
-      }
-    }
-  }, [
-    activeModel,
-    busy,
-    createMission,
-    goal,
-    provider,
-    runOne,
-    setActiveAgent,
-    spawnAgent,
-    updateMission,
-  ]);
+    setGoal('');
+    void runMission({ goal: trimmed, model: activeModel, onMirror: missionKanbanBridge() });
+  }, [activeModel, busy, goal, provider]);
 
   const spawnManual = useCallback(
     (roleId: AgentRoleId, task: string) => {
@@ -273,17 +140,17 @@ export default function AgentManagerPage(): JSX.Element {
       });
       setActiveAgent(id);
       setSpawnRole(null);
-      void runOne(id);
+      void runAgentById(id);
     },
-    [activeModel, provider, runOne, setActiveAgent, spawnAgent],
+    [activeModel, provider, setActiveAgent, spawnAgent],
   );
 
   const stop = useCallback((agentId: string) => {
-    controllers.current.get(agentId)?.abort();
+    abortAgent(agentId);
   }, []);
 
   const stopAll = useCallback(() => {
-    controllers.current.forEach((c) => c.abort());
+    abortAllAgents();
   }, []);
 
   // ---- Render --------------------------------------------------------------
@@ -472,7 +339,7 @@ export default function AgentManagerPage(): JSX.Element {
                 active={agent.id === activeAgentId}
                 onSelect={() => setActiveAgent(agent.id)}
                 onStop={() => stop(agent.id)}
-                onRetry={() => void runOne(agent.id)}
+                onRetry={() => void runAgentById(agent.id)}
                 onRemove={() => removeAgent(agent.id)}
               />
             ))}
@@ -509,8 +376,8 @@ export default function AgentManagerPage(): JSX.Element {
           agent={activeAgent}
           onClose={() => setActiveAgent(null)}
           onStop={() => stop(activeAgent.id)}
-          onRetry={() => void runOne(activeAgent.id)}
-          onFollowUp={(text) => void runOne(activeAgent.id, text)}
+          onRetry={() => void runAgentById(activeAgent.id)}
+          onFollowUp={(text) => void runAgentById(activeAgent.id, { followUp: text })}
         />
       )}
     </div>
