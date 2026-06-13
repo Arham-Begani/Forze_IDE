@@ -1,4 +1,4 @@
-import { ShieldAlert, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, AlertTriangle, Loader2, FileInput } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { scanText, type SecretFinding } from '../lib/secretRules';
 import { partitionFindings } from '../lib/diffScan';
@@ -6,6 +6,8 @@ import { basename } from '../lib/fs';
 import { reviewStaged } from '../workbench/commitGuard';
 import { useCommitGuard } from '../workbench/commitGuardStore';
 import { useProject } from '../workbench/projectStore';
+import { useWorkbench } from '../workbench/store';
+import { toast } from '../shell/toast';
 
 interface RlsFinding {
   file: string;
@@ -29,9 +31,45 @@ export default function SecurityAuditor(): JSX.Element {
   const [migrationSql, setMigrationSql] = useState('');
   const [rlsFindings, setRlsFindings] = useState<RlsFinding[]>([]);
 
+  const [dragOver, setDragOver] = useState(false);
+
   const runSecretScan = useCallback(() => {
     setSecretFindings(scanText(bufferContents, bufferPath || null));
   }, [bufferContents, bufferPath]);
+
+  /** Pull the active editor tab's path + last-saved contents and scan them. */
+  const loadActiveFile = useCallback(() => {
+    const wb = useWorkbench.getState();
+    const tab = wb.editorTabs.find((t) => t.id === wb.activeTabId);
+    if (!tab?.filePath) {
+      toast('Open a file in the editor first.', 'warn');
+      return;
+    }
+    const contents = useProject.getState().getBuffer(tab.filePath);
+    if (contents == null) {
+      toast('That file isn’t loaded yet — open it in the editor and retry.', 'warn');
+      return;
+    }
+    setBufferPath(tab.filePath);
+    setBufferContents(contents);
+    setSecretFindings(scanText(contents, tab.filePath));
+  }, []);
+
+  /** Read a file dropped onto the textarea as text and scan it. */
+  const onDropFile = useCallback(async (event: React.DragEvent<HTMLTextAreaElement>) => {
+    event.preventDefault();
+    setDragOver(false);
+    const file = event.dataTransfer.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setBufferPath(file.name);
+      setBufferContents(text);
+      setSecretFindings(scanText(text, file.name));
+    } catch (err) {
+      toast(`Could not read ${file.name}: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
+  }, []);
 
   const runRlsScan = useCallback(() => {
     const findings: RlsFinding[] = [];
@@ -69,10 +107,27 @@ export default function SecurityAuditor(): JSX.Element {
       <PrecommitReview />
 
       <div className="card">
-        <strong>Secret Watcher</strong>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <strong>Secret Watcher</strong>
+          <button
+            type="button"
+            onClick={loadActiveFile}
+            title="Load the file open in the editor"
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 11,
+            }}
+          >
+            <FileInput size={12} />
+            Load active file
+          </button>
+        </div>
         <p className="muted" style={{ marginTop: 4 }}>
-          Paste the contents of a file (or dump from the active editor buffer)
-          and run the scan before committing.
+          Pull in the file you’re editing, drop a file onto the box, or paste
+          contents — then scan it for secrets before committing.
         </p>
         <label>
           <div className="muted">File path</div>
@@ -87,9 +142,19 @@ export default function SecurityAuditor(): JSX.Element {
           <textarea
             value={bufferContents}
             onChange={(e) => setBufferContents(e.target.value)}
+            onDrop={onDropFile}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!dragOver) setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
             rows={6}
-            style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace" }}
-            placeholder="Paste or drag file contents here…"
+            style={{
+              ...inputStyle,
+              fontFamily: "'JetBrains Mono', monospace",
+              outline: dragOver ? '1px dashed var(--color-accent)' : undefined,
+            }}
+            placeholder="Paste or drag a file here…"
           />
         </label>
         <div style={{ marginTop: 8 }}>
@@ -145,7 +210,6 @@ export default function SecurityAuditor(): JSX.Element {
 function PrecommitReview(): JSX.Element {
   const workspaceRoot = useProject((s) => s.workspaceRoot);
   const isGitRepo = useProject((s) => s.isGitRepo);
-  const securityReview = useCommitGuard((s) => s.securityReviewEnabled);
   const lastReview = useCommitGuard((s) => s.lastReview);
   const [busy, setBusy] = useState(false);
 
@@ -174,11 +238,13 @@ function PrecommitReview(): JSX.Element {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <ShieldCheck size={14} strokeWidth={1.8} />
         <strong>Pre-commit review</strong>
-        {!securityReview && (
-          <span className="muted" style={{ marginLeft: 'auto', fontSize: 11 }}>
-            gate off — enable in Source Control
-          </span>
-        )}
+        <span
+          className="muted"
+          style={{ marginLeft: 'auto', fontSize: 11 }}
+          title="The staged diff is scanned before every commit. This gate is always on."
+        >
+          always on
+        </span>
       </div>
       <p className="muted" style={{ marginTop: 4 }}>
         Scans the newly-added lines of your staged diff for leaked secrets — the
