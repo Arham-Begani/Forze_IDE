@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@tauri-apps/plugin-process": "^2.3.1"
+  }
+}
