@@ -126,10 +126,8 @@ export default function SettingsView(): JSX.Element {
 
 function CommitGuardCard(): JSX.Element {
   const autoCommit = useCommitGuard((s) => s.autoCommitEnabled);
-  const securityReview = useCommitGuard((s) => s.securityReviewEnabled);
   const threshold = useCommitGuard((s) => s.threshold);
   const setAutoCommit = useCommitGuard((s) => s.setAutoCommit);
-  const setSecurityReview = useCommitGuard((s) => s.setSecurityReview);
   const setThreshold = useCommitGuard((s) => s.setThreshold);
 
   return (
@@ -139,9 +137,9 @@ function CommitGuardCard(): JSX.Element {
         <strong style={{ fontSize: 13 }}>Commit Guard</strong>
       </div>
       <p className="dim">
-        Automate and protect your commits. These mirror the toggles in the
-        Source Control panel and apply to changes you make and changes your
-        agents make.
+        Automate and protect your commits. Auto-commit mirrors the toggle in the
+        Source Control panel; both it and the always-on security review apply to
+        changes you make and changes your agents make.
       </p>
 
       <SettingRow
@@ -178,13 +176,14 @@ function CommitGuardCard(): JSX.Element {
       <SettingRow
         icon={<ShieldCheck size={13} strokeWidth={1.8} />}
         title="Security review"
-        desc="Scan the staged diff before every commit and block on leaked API keys or secrets."
+        desc="Every commit's staged diff is scanned for leaked API keys and secrets, and blocked if one is found. Open the Security panel to review on demand."
         control={
-          <ToggleSwitch
-            checked={securityReview}
-            onChange={setSecurityReview}
-            label="Security review"
-          />
+          <span
+            className="dim"
+            style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}
+          >
+            Always on
+          </span>
         }
       />
     </div>
