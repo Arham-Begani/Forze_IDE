@@ -4,8 +4,8 @@ import { persist } from 'zustand/middleware';
 export type BipPostStatus = 'queued' | 'publishing' | 'published' | 'failed';
 
 /**
- * A Build-in-Public post queued for LinkedIn. Generated in Ad Studio, then
- * either published immediately or scheduled for later. The scheduler
+ * A Build-in-Public post queued for LinkedIn. Generated in the Build in Public
+ * page, then either published immediately or scheduled for later. The scheduler
  * (`bipScheduler.ts`) walks this list and posts due items through the real
  * LinkedIn OAuth path in `lib/publish.ts`.
  */
