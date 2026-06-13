@@ -1,19 +1,11 @@
 'use client';
 
-import {
-  Bell,
-  ChevronDown,
-  Megaphone,
-  Rocket,
-  Search,
-  Sun,
-} from 'lucide-react';
+import { Bell, ChevronDown, Rocket, Search, Sun } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { Logo } from './Logo';
 
 export function TopBar() {
   const setPaletteOpen = useStore((s) => s.setCommandPaletteOpen);
-  const setActivity = useStore((s) => s.setActiveActivity);
 
   return (
     <header className="h-14 flex items-center px-4 gap-3 border-b border-line bg-bg-base">
@@ -57,13 +49,6 @@ export function TopBar() {
         <button className="h-9 px-3 rounded-lg bg-accent text-bg-base hover:bg-accent-bright transition-colors flex items-center gap-2 text-sm font-medium">
           <Rocket className="w-4 h-4" />
           Deploy
-        </button>
-        <button
-          onClick={() => setActivity('ad-studio')}
-          className="h-9 px-3 rounded-lg border border-line bg-bg-raised hover:bg-bg-hover transition-colors flex items-center gap-2 text-sm text-ink"
-        >
-          <Megaphone className="w-4 h-4" />
-          Ad Studio
         </button>
         <button className="relative w-9 h-9 rounded-lg flex items-center justify-center text-ink-muted hover:bg-bg-hover hover:text-ink transition-colors">
           <Bell className="w-4 h-4" />
