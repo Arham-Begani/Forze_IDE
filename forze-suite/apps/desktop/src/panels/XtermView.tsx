@@ -152,7 +152,6 @@ export default function XtermView({
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // eslint-disable-next-line no-console
         console.error('[forze terminal] init failed', err, '(t+', Date.now() - mountedAt, 'ms)');
         setError(message);
         termRef.current?.write(
@@ -335,7 +334,6 @@ async function initialiseTerminal(
     const ptyId = ptyIdRef.current;
     if (!ptyId) return;
     void writePty(ptyId, data).catch((err) => {
-      // eslint-disable-next-line no-console
       console.error('[forze terminal] write failed', err);
     });
   });
