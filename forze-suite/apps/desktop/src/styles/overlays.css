@@ -1,0 +1,248 @@
+/* === Toasts ============================================================== */
+.toast-host {
+  position: fixed;
+  right: 20px;
+  bottom: 80px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+  max-width: 400px;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(var(--color-overlay-rgb), 0.05);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  animation: scaleIn var(--motion-medium) forwards;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+.toast__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+}
+.toast--success { border-color: rgba(var(--color-overlay-rgb), 0.2); }
+.toast--success .toast__dot { background: var(--color-ok); color: var(--color-ok); }
+.toast--warn { border-color: rgba(201, 168, 106, 0.3); }
+.toast--warn .toast__dot { background: var(--color-warn); color: var(--color-warn); }
+.toast--error { border-color: rgba(229, 100, 95, 0.3); }
+.toast--error .toast__dot { background: var(--color-danger); color: var(--color-danger); }
+.toast--info { border-color: rgba(148, 163, 184, 0.3); }
+.toast--info .toast__dot { background: var(--color-info); color: var(--color-info); }
+
+/* === In-app modal (replaces native alert/confirm/prompt) ================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeIn var(--motion-fast) forwards;
+}
+.modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(var(--color-overlay-rgb), 0.05);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  animation: scaleIn var(--motion-medium) forwards;
+}
+.modal--danger {
+  border-color: rgba(229, 100, 95, 0.4);
+}
+.modal__title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+.modal__body {
+  overflow: auto;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.modal__message {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+.modal__input {
+  width: 100%;
+  margin-top: 10px;
+}
+.modal__code {
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: rgba(var(--color-overlay-rgb), 0.04);
+  border: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+}
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+button.btn-danger {
+  background: var(--color-danger);
+  color: #fff;
+  border: 1px solid rgba(229, 100, 95, 0.55);
+  font-weight: var(--font-weight-semibold);
+}
+button.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+/* Survival-score breakdown modal */
+.score-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.score-modal__hero {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+.score-modal__value {
+  font-size: 40px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  color: var(--color-text);
+}
+.score-modal__band {
+  font-size: var(--font-size-sm);
+  text-transform: capitalize;
+  letter-spacing: 0.4px;
+  color: var(--color-text-muted);
+}
+.score-modal__hero--strong .score-modal__value { color: var(--color-ok); }
+.score-modal__hero--steady .score-modal__value { color: var(--color-info); }
+.score-modal__hero--shaky .score-modal__value { color: var(--color-warn); }
+.score-modal__hero--critical .score-modal__value { color: var(--color-danger); }
+.score-modal__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.score-modal__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+.score-modal__label { color: var(--color-text-muted); }
+.score-modal__delta {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-ok);
+}
+.score-modal__delta.is-negative { color: var(--color-danger); }
+
+/* About modal */
+.about-modal__name {
+  font-size: 18px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+.about-modal__version {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-dim);
+}
+.about-modal__tagline {
+  margin: 12px 0 0;
+  color: var(--color-text-muted);
+}
+
+/* === Right-dock drop zone (shown while dragging a skill) ================= */
+.dropzone-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 42%;
+  max-width: 460px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent-soft);
+  border-left: 2px dashed var(--color-accent-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+}
+.dropzone-right.is-over {
+  background: rgba(var(--color-accent-rgb), 0.15);
+  border-left-color: var(--color-accent);
+  color: var(--color-text);
+  box-shadow: inset 10px 0 30px rgba(var(--color-accent-rgb), 0.1);
+}
+
+/* === Premium polish (overlays) =========================================== */
+
+/* Modals rise with a gentle spring instead of the generic scale-in. */
+.modal {
+  animation: modalIn 0.28s var(--ease-spring) both;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Toasts slide in from the right edge and lift slightly under the cursor. */
+.toast {
+  animation: toastIn 0.3s var(--ease-spring) both;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(24px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.toast:hover {
+  transform: translateX(-3px);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-overlay-rgb), 0.08);
+}
+

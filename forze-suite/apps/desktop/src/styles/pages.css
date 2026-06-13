@@ -1,0 +1,1210 @@
+/* === Startup OS pages (full-area editor tabs) ============================= */
+.apppage {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--color-editor-bg);
+  background-image: none;
+}
+
+.apppage__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 34px 40px 26px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.apppage__title {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  line-height: 1.1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-text);
+}
+
+.apppage__title svg {
+  color: var(--color-accent-bright);
+}
+
+.apppage__subtitle {
+  margin: 8px 0 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-dim);
+  line-height: 1.55;
+}
+
+.apppage__body {
+  padding: 28px 40px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.appcard {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-card);
+  transition: all var(--motion-medium);
+}
+.appcard:hover {
+  border-color: rgba(var(--color-accent-rgb), 0.25);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+}
+
+.appcard__title {
+  margin: 0 0 16px;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.1px;
+  color: var(--color-text);
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+.grid-auto { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+
+@media (max-width: 1100px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: 1fr; }
+}
+
+.kpi {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-card);
+  transition: all var(--motion-medium);
+}
+.kpi:hover {
+  border-color: rgba(var(--color-accent-rgb), 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+}
+.kpi__label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-dim);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  font-weight: var(--font-weight-semibold);
+}
+.kpi__value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  margin-top: 12px;
+  color: var(--color-text);
+  text-shadow: 0 2px 10px rgba(var(--color-overlay-rgb), 0.05);
+}
+.kpi__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--color-ok);
+  background: var(--color-ok-soft);
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  margin-top: 8px;
+  font-weight: var(--font-weight-semibold);
+  width: fit-content;
+}
+
+.btn-accent {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.55);
+  border-radius: var(--radius-md);
+  padding: 9px 18px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.1px;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(var(--color-accent-rgb), 0.25), inset 0 1px 0 rgba(var(--color-overlay-rgb), 0.15);
+  transition: all var(--motion-fast);
+}
+.btn-accent:hover:not(:disabled) {
+  background: var(--color-accent-bright);
+  border-color: rgba(var(--color-accent-rgb), 0.55);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(var(--color-accent-rgb), 0.4), inset 0 1px 0 rgba(var(--color-overlay-rgb), 0.2);
+}
+.btn-accent:active { transform: translateY(0); }
+
+.btn-outline {
+  background: rgba(var(--color-overlay-rgb), 0.015);
+  color: var(--color-text);
+  border: 1px solid rgba(var(--color-overlay-rgb), 0.06);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--motion-fast);
+}
+.btn-outline:hover:not(:disabled) {
+  background: rgba(var(--color-overlay-rgb), 0.04);
+  border-color: rgba(var(--color-overlay-rgb), 0.1);
+}
+.btn-outline:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Compact square icon button for inline row actions (e.g. Deployments table). */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(var(--color-overlay-rgb), 0.06);
+  background: rgba(var(--color-overlay-rgb), 0.015);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+.icon-btn:hover {
+  background: rgba(var(--color-accent-rgb), 0.12);
+  border-color: rgba(var(--color-accent-rgb), 0.3);
+  color: var(--color-accent-bright);
+}
+.icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(var(--color-overlay-rgb), 0.08);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  background: rgba(var(--color-overlay-rgb), 0.01);
+}
+.pill--accent {
+  color: var(--color-accent-bright);
+  border-color: rgba(var(--color-accent-rgb), 0.2);
+  background: var(--color-accent-soft);
+}
+.pill--ok {
+  color: var(--color-ok);
+  background: var(--color-ok-soft);
+  border-color: rgba(var(--color-overlay-rgb), 0.2);
+}
+.pill--warn {
+  color: var(--color-warn);
+  background: var(--color-warn-soft);
+  border-color: rgba(201, 168, 106, 0.25);
+}
+.pill--danger {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border-color: rgba(229, 100, 95, 0.25);
+}
+
+.apptable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.apptable th {
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-dim);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.apptable td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  transition: all var(--motion-fast);
+}
+.apptable tr:last-child td { border-bottom: none; }
+.apptable tr:hover td {
+  background: rgba(var(--color-overlay-rgb), 0.02);
+  color: var(--color-text);
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  transition: all var(--motion-fast);
+}
+.list-row:last-child { border-bottom: none; }
+.list-row:hover {
+  color: var(--color-text);
+}
+
+.progress {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(var(--color-overlay-rgb), 0.05);
+  overflow: hidden;
+}
+.progress__fill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+}
+
+.swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(var(--color-overlay-rgb), 0.03);
+  border: 1px solid rgba(var(--color-overlay-rgb), 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: all var(--motion-fast);
+}
+.list-row:hover .avatar {
+  border-color: rgba(var(--color-accent-rgb), 0.3);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-bright);
+}
+
+.tag-chip {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(var(--color-overlay-rgb), 0.04);
+  color: var(--color-text-muted);
+}
+
+.thumb {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(var(--color-overlay-rgb), 0.05);
+  background: rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-dim);
+  transition: all var(--motion-medium);
+}
+.thumb:hover {
+  border-color: rgba(var(--color-accent-rgb), 0.25);
+  background: rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+  color: var(--color-text);
+}
+
+/* ============================================================
+   PREMIUM ANIMATIONS & LAYOUT POLISH
+   Added below existing styles â€” do NOT modify anything above.
+   ============================================================ */
+
+/* -------------------------------------------------------
+   1. @keyframes Animations
+   ------------------------------------------------------- */
+
+@keyframes slideInLeft {
+  from { transform: translateX(-16px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(16px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes slideInDown {
+  from { transform: translateY(-6px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes expandIn {
+  from { transform: scaleY(0.97); opacity: 0; }
+  to   { transform: scaleY(1);    opacity: 1; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 0px var(--color-accent)); }
+  50%      { filter: brightness(1.15) drop-shadow(0 0 6px var(--color-accent)); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0;  }
+}
+
+@keyframes tabEnter {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1);    }
+  50%      { transform: scale(1.02); }
+}
+
+@keyframes tooltipIn {
+  from { transform: translateX(-4px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes contentFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* -------------------------------------------------------
+   2. Animation Assignments
+   ------------------------------------------------------- */
+
+/* --- Panel & sidebar entrance animations --- */
+.sidebar        { animation: slideInLeft  0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.rightdock      { animation: slideInRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bottom-panel   { animation: slideInUp   0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.workbench__topbar { animation: slideInDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* --- Content fade-in animations --- */
+.dockhost__scroll  { animation: contentFade 0.3s  cubic-bezier(0.16, 1, 0.3, 1) both; }
+.editor-area__body { animation: contentFade 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.apppage           { animation: contentFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.cmd-palette__list { animation: contentFade 0.2s  cubic-bezier(0.16, 1, 0.3, 1) 0.08s both; }
+
+/* --- Tab entrance animation --- */
+.topbar__tab { animation: tabEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* --- Brand logo breathing --- */
+.rail__logo svg { animation: breathe 4s ease-in-out infinite; }
+
+/* --- Tooltip entrance override --- */
+.rail__item:hover .rail__tooltip { animation: tooltipIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* --- Toast entrance enhancement (toastIn lives in overlays.css) --- */
+.toast { animation: toastIn 0.3s var(--ease-spring) both; }
+
+/* --- Feature card staggered entrance --- */
+.feature-card:nth-child(1) { animation: contentFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both; }
+.feature-card:nth-child(2) { animation: contentFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.1s  both; }
+.feature-card:nth-child(3) { animation: contentFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both; }
+.feature-card:nth-child(4) { animation: contentFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.2s  both; }
+.feature-card:nth-child(5) { animation: contentFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both; }
+.feature-card:nth-child(6) { animation: contentFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.3s  both; }
+
+/* -------------------------------------------------------
+   3. Enhanced Interactive Transitions
+   ------------------------------------------------------- */
+
+/* --- Rail item hover enhancement --- */
+.rail__item          { transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+.rail__item:hover    { transform: scale(1.06); }
+.rail__item:active   { transform: scale(0.95); transition-duration: 0.08s; }
+
+/* --- Active rail indicator animation --- */
+.rail__item.is-active::before {
+  animation: expandIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* --- Card hover lift enhancement --- */
+.card, .appcard, .kpi, .feature-card {
+  will-change: transform, box-shadow;
+}
+
+/* --- Chat bubble entrance --- */
+.chat__bubble        { animation: contentFade  0.2s  cubic-bezier(0.16, 1, 0.3, 1) both; }
+.chat__bubble--user  { animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* --- Resize handle interaction --- */
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+.resize-handle--vertical::after {
+  width: 3px;
+  background: var(--color-accent);
+}
+.resize-handle--horizontal::after {
+  height: 3px;
+  background: var(--color-accent);
+}
+.resize-handle:hover::after,
+.resize-handle[data-resize-handle-active]::after {
+  opacity: 1;
+}
+
+/* --- Status bar chip hover micro-bounce --- */
+.status-bar__chip:hover  { transform: translateY(-1px); }
+.status-bar__chip:active { transform: translateY(0); transition-duration: 0.08s; }
+
+/* --- Wizard step indicator animation --- */
+.wizard__step-indicator span.is-current {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* --- Progress bar animation --- */
+.progress__fill {
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- List row hover slide --- */
+.list-row:hover {
+  transform: translateX(2px);
+}
+
+/* --- Tree row hover animation --- */
+.tree-row       { transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1); }
+.tree-row:hover { transform: translateX(2px); }
+
+/* -------------------------------------------------------
+   4. Accessibility â€“ Reduced Motion
+   ------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* -------------------------------------------------------
+   5. Focus Visibility Improvements
+   ------------------------------------------------------- */
+*:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.rail__item:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb), 0.15);
+}
+
+.topbar__tab:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.bottom-panel__tab:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+
+.status-bar__crumb:focus-visible,
+.status-bar__chip:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.tree-row:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -1px;
+  background: var(--color-surface-active);
+}
+
+.cmd-palette__item:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -1px;
+}
+
+.launch__chip:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------
+   6. Layout Polish
+   ------------------------------------------------------- */
+
+/* --- Improved scrollbar behavior --- */
+.sidebar:hover::-webkit-scrollbar-thumb,
+.dockhost__scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(var(--color-overlay-rgb), 0.15);
+}
+
+/* --- Smoother panel transitions --- */
+.workbench__main {
+  transition: gap 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- Feature card grid responsive improvement --- */
+@media (max-width: 800px) {
+  .launch__features {
+    grid-template-columns: 1fr;
+  }
+  .launch__hero {
+    padding: 0 8px;
+  }
+  .launch__title {
+    font-size: 28px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .launch__features {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* --- Better spacing for dense panels --- */
+.panel-grid {
+  animation: contentFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* --- Smooth icon transitions in rail --- */
+.rail__item svg {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rail__item:hover svg {
+  transform: scale(1.1);
+}
+.rail__item.is-active svg {
+  filter: drop-shadow(0 0 4px var(--color-accent));
+}
+
+/* === Workspace search ====================================================
+   Rendered inside .dockhost__scroll (an absolute, overflow:auto container),
+   so the panel itself doesn't scroll â€” the header is pinned with sticky and
+   the results flow into the existing scroll. The negative margins cancel the
+   dockhost padding so dividers span the full width. */
+.search-view {
+  margin: -12px -10px -16px;
+}
+.search-view__head {
+  position: sticky;
+  top: -12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 10px 8px;
+  background: var(--color-sidebar-bg);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.search-view__field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-view__icon {
+  position: absolute;
+  left: 9px;
+  color: var(--color-text-dim);
+  pointer-events: none;
+}
+.search-view__input {
+  width: 100%;
+  padding: 7px 26px 7px 28px;
+  font-size: 12px;
+}
+.search-view__clear {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.search-view__clear:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+.search-view__opts {
+  display: flex;
+  gap: 4px;
+}
+.search-view__opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+.search-view__opt:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+.search-view__opt.is-active {
+  color: var(--color-accent-bright);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent-border);
+}
+.search-view__status {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.search-view__results {
+  padding: 4px 0 8px;
+}
+.search-file {
+  display: flex;
+  flex-direction: column;
+}
+.search-file__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.search-file__head:hover {
+  background: var(--color-surface-hover);
+}
+.search-file__name {
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+.search-file__dir {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--color-text-dim);
+}
+.search-file__count {
+  flex-shrink: 0;
+  min-width: 18px;
+  padding: 0 6px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-pill);
+}
+.search-match {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 10px 3px 26px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.search-match:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+.search-match__line {
+  flex-shrink: 0;
+  min-width: 28px;
+  text-align: right;
+  color: var(--color-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.search-match__preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+.search-match__hit {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-bright);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ===================================================================== */
+/* Agent Manager (Mission Control)                                       */
+/* ===================================================================== */
+
+.agentmgr .apppage__body { padding-bottom: 120px; }
+
+/* --- Orchestrator console --- */
+.agentmgr__console {
+  border-color: rgba(var(--color-accent-rgb), 0.18);
+  background: var(--glass-bg);
+}
+.agentmgr__console-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.agentmgr__arch-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--color-accent-bright);
+  background: var(--color-accent-soft);
+  border: 1px solid var(--color-accent-border);
+  box-shadow: 0 0 18px rgba(var(--color-accent-rgb), 0.22);
+  flex-shrink: 0;
+}
+.agentmgr__goal {
+  width: 100%;
+  resize: vertical;
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  color: var(--color-text);
+}
+.agentmgr__goal:focus {
+  outline: none;
+  border-color: var(--color-accent-border);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+.agentmgr__console-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* --- Spawn role buttons --- */
+.agentmgr__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.agentmgr__role-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  background: rgba(var(--color-overlay-rgb), 0.02);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+.agentmgr__role-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+  transform: translateY(-1px);
+}
+.agentmgr__role-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* --- Roster grid --- */
+.agentmgr__roster { align-items: stretch; }
+.grid.agentmgr__roster { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+
+.agentmgr__agent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+}
+.agentmgr__agent.is-active {
+  border-color: var(--color-accent-border);
+  box-shadow: 0 0 0 1px var(--color-accent-border), var(--glow-accent);
+}
+.agentmgr__agent.is-working {
+  border-color: rgba(var(--color-accent-rgb), 0.22);
+}
+.agentmgr__agent-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.agentmgr__role-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(var(--color-overlay-rgb), 0.03);
+  border: 1px solid rgba(var(--color-overlay-rgb), 0.06);
+  flex-shrink: 0;
+}
+.agentmgr__agent-name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agentmgr__agent-role {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--color-text-dim);
+}
+.agentmgr__agent-task {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.agentmgr__stream {
+  flex: 1;
+  min-height: 64px;
+  max-height: 120px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.agentmgr__agent-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agentmgr__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+.agentmgr__icon-btn:hover {
+  color: var(--color-text);
+  background: rgba(var(--color-overlay-rgb), 0.05);
+  border-color: var(--color-border);
+}
+
+/* Always-visible close cross for the detail drawer â€” a bare dim icon on matte
+   black reads as empty space, so the close affordance gets a standing ring. */
+.agentmgr__close {
+  color: var(--color-text-muted);
+  background: rgba(var(--color-overlay-rgb), 0.04);
+  border-color: var(--color-border);
+}
+.agentmgr__close:hover {
+  color: var(--color-text);
+  background: rgba(229, 100, 95, 0.16);
+  border-color: rgba(229, 100, 95, 0.55);
+}
+
+/* --- Architect briefing + consolidated mission report --- */
+.agentmgr__brief-text {
+  margin: 4px 0 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+.agentmgr__brief-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-dim);
+}
+.agentmgr__report {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.agentmgr__report pre {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* --- Empty state --- */
+.agentmgr__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 54px 20px;
+  text-align: center;
+  color: var(--color-text-dim);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-card);
+}
+.agentmgr__empty p { margin: 0; max-width: 360px; font-size: var(--font-size-sm); }
+
+/* --- Spawn dialog --- */
+.agentmgr__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: contentFade 0.18s var(--ease-out) both;
+}
+.agentmgr__dialog {
+  width: min(520px, 92vw);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-lg);
+  padding: 18px 20px;
+}
+.agentmgr__dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* --- Detail drawer --- */
+.agentmgr__drawer {
+  position: fixed;
+  top: var(--size-titlebar);
+  right: 0;
+  bottom: var(--size-status-bar);
+  width: min(460px, 94vw);
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur));
+  border-left: 1px solid var(--glass-border);
+  box-shadow: -24px 0 60px -20px rgba(0, 0, 0, 0.7);
+  animation: drawerIn 0.26s var(--ease-out) both;
+}
+@keyframes drawerIn {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.agentmgr__drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.agentmgr__drawer-task {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.agentmgr__drawer-task p {
+  margin: 6px 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+.agentmgr__drawer-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+.agentmgr__drawer-output pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.agentmgr__drawer-foot {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* --- Motion --- */
+.agentmgr__spinner {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  display: inline-block;
+  margin-right: 5px;
+  animation: agentmgrSpin 0.7s linear infinite;
+}
+@keyframes agentmgrSpin { to { transform: rotate(360deg); } }
+.agentmgr__pulse { animation: agentmgrPulse 1.4s ease-in-out infinite; }
+@keyframes agentmgrPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+
+/* === Premium polish (pages & cards) ======================================
+   A coherent "obsidian glass" upgrade: cards get a soft accent spotlight
+   that fades in from the top edge on hover, page titles get a subtle ink
+   gradient, and progress bars carry a slow light sweep. Everything below
+   animates transform/opacity only. */
+
+/* Accent spotlight bleeding in from the card's top edge on hover. */
+.appcard,
+.kpi,
+.card,
+.feature-card {
+  position: relative;
+}
+.appcard::before,
+.kpi::before,
+.card::before,
+.feature-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    480px 110px at 50% 0%,
+    rgba(var(--color-accent-rgb), 0.08),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity var(--motion-medium);
+  pointer-events: none;
+}
+.appcard:hover::before,
+.kpi:hover::before,
+.card:hover::before,
+.feature-card:hover::before {
+  opacity: 1;
+}
+
+/* Page titles: ink fades slightly toward the baseline — premium type feel.
+   -webkit-text-fill-color leaves the inline icon (currentColor) untouched. */
+.apppage__title {
+  background: linear-gradient(
+    180deg,
+    var(--color-text) 50%,
+    color-mix(in srgb, var(--color-text) 68%, transparent)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Progress bars carry a slow light sweep while visible. */
+.progress__fill {
+  position: relative;
+  overflow: hidden;
+}
+.progress__fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.28),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: progressSheen 2.4s ease-in-out infinite;
+}
+@keyframes progressSheen {
+  to { transform: translateX(100%); }
+}
+
+/* KPI numbers settle in with a tiny rise when a page mounts. */
+.kpi__value {
+  animation: contentFade 0.4s var(--ease-out) both;
+}
+
+/* Pills brighten on hover so chips everywhere feel interactive. */
+.pill {
+  transition: border-color var(--motion-fast), color var(--motion-fast), background var(--motion-fast);
+}
+
+/* Table rows get an accent inset hairline on hover. */
+.apptable tr:hover td:first-child {
+  box-shadow: inset 2px 0 0 rgba(var(--color-accent-rgb), 0.45);
+}

@@ -1,0 +1,223 @@
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-md);
+  letter-spacing: -0.1px;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+}
+
+::selection {
+  background: rgba(var(--color-accent-rgb), 0.32);
+  color: var(--color-text);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+  transition: all var(--motion-fast);
+  font-size: var(--font-size-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+button:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+button:disabled {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+button.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.55);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.1px;
+  box-shadow: 0 2px 8px rgba(var(--color-accent-rgb), 0.25), inset 0 1px 0 rgba(var(--color-overlay-rgb), 0.15);
+  transition: all var(--motion-fast);
+}
+
+button.btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-bright);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(var(--color-accent-rgb), 0.4), inset 0 1px 0 rgba(var(--color-overlay-rgb), 0.2);
+}
+
+button.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(var(--color-accent-rgb), 0.2);
+}
+
+button.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-muted);
+}
+
+button.btn-ghost:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+  border-color: transparent;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  outline: none;
+  transition: all var(--motion-fast);
+  font-size: var(--font-size-sm);
+  backdrop-filter: blur(8px);
+}
+
+input,
+textarea {
+  caret-color: var(--color-accent);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-dim);
+  transition: opacity var(--motion-fast);
+}
+
+input:focus::placeholder,
+textarea:focus::placeholder {
+  opacity: 0.6;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--color-accent-border);
+  background: var(--color-input-bg-focus);
+  box-shadow: 0 0 0 3px var(--color-accent-soft), 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%2394a3b8' d='M0 0l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 28px;
+}
+
+kbd {
+  display: inline-block;
+  padding: 2px 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: rgba(var(--color-overlay-rgb), 0.03);
+  border: 1px solid rgba(var(--color-overlay-rgb), 0.08);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(var(--color-overlay-rgb), 0.09);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--radius-pill);
+  transition: background var(--motion-fast);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--color-overlay-rgb), 0.2);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* === Premium polish (base layer) =========================================
+   Tactile press on every button, and a light-sweep sheen across filled
+   accent buttons on hover. Transform/opacity only — GPU-composited. */
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: 0.08s;
+}
+
+button.btn-primary,
+.btn-accent {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Diagonal light sweep that glides across the fill on hover. */
+button.btn-primary::after,
+.btn-accent::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 50%;
+  background: linear-gradient(
+    105deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  transform: skewX(-20deg);
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
+
+button.btn-primary:hover:not(:disabled)::after,
+.btn-accent:hover:not(:disabled)::after {
+  opacity: 1;
+  animation: btnSheen 0.65s var(--ease-out) forwards;
+}
+
+@keyframes btnSheen {
+  from { left: -60%; }
+  to { left: 120%; }
+}
+

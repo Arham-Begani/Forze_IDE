@@ -1,0 +1,492 @@
+/* === Code editor (custom, dependency-free) =============================== */
+.codeedit {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  background: var(--color-editor-bg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  overflow: hidden;
+}
+
+.codeedit__gutter {
+  flex-shrink: 0;
+  padding: 14px 0;
+  text-align: right;
+  color: var(--color-text-disabled);
+  background: var(--color-editor-gutter);
+  user-select: none;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+.codeedit__gutter-inner {
+  will-change: transform;
+}
+
+.codeedit__num {
+  position: relative;
+  height: 20px;
+  padding: 0 16px 0 20px;
+  font-variant-numeric: tabular-nums;
+  transition: color var(--motion-fast);
+}
+
+.codeedit__num:hover {
+  color: var(--color-text-muted);
+}
+
+.codeedit__num.is-error {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* VS Code-style change gutter: a 3px bar on the gutter's inner edge for added
+   (green) and modified (blue) lines, and a small triangle marking deletions. */
+.codeedit__num.is-added::after,
+.codeedit__num.is-modified::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 3px;
+}
+
+.codeedit__num.is-added::after {
+  background: var(--color-git-added-strong);
+}
+
+.codeedit__num.is-modified::after {
+  background: var(--color-git-modified);
+}
+
+.codeedit__num.is-deleted::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-right: 6px solid var(--color-git-deleted);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.codeedit__main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.codeedit__pre,
+.codeedit__ta {
+  margin: 0;
+  border: 0;
+  padding: 14px 20px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre;
+  word-wrap: normal;
+  overflow: auto;
+}
+
+.codeedit__pre {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--color-text);
+  background: transparent;
+  overflow: hidden;
+}
+
+.codeedit__ta {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  resize: none;
+  /* Reset the global form-control styling (rgba background + backdrop blur)
+     so the transparent textarea never hides or blurs the highlighted <pre>
+     it sits on top of. Without these resets the code looks faded and goes
+     nearly invisible on focus. */
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: transparent;
+  caret-color: var(--color-accent-bright);
+  outline: none;
+  border-radius: 0;
+}
+
+.codeedit__ta::selection {
+  background: rgba(var(--color-accent-rgb), 0.25);
+  color: transparent;
+}
+
+.codeedit__ta:focus {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  outline: none;
+  box-shadow: none;
+  border: 0;
+}
+
+/* === Syntax highlighting (highlight.js token theme) ======================
+   Premium dark palette anchored on the IDE's cyan accent, with a few
+   restrained complementary hues so every language reads clearly on the
+   near-black editor background. Unclassed text inherits .codeedit__pre. */
+.codeedit__pre .hljs { color: var(--color-text); background: transparent; }
+
+/* Comments & docs â€” recede */
+.hljs-comment,
+.hljs-quote { color: #5b6273; font-style: italic; }
+.hljs-doctag { color: #a9f4ff; font-style: italic; }
+
+/* Keywords & control flow â€” the cyan accent */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link { color: var(--color-accent-bright); font-weight: var(--font-weight-semibold); }
+.hljs-keyword.hljs-meta,
+.hljs-meta .hljs-keyword { color: var(--color-accent); }
+
+/* Strings & string-like */
+.hljs-string,
+.hljs-regexp,
+.hljs-char.escape_,
+.hljs-addition { color: #9fc176; }
+
+/* Numbers, booleans, constants */
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet { color: #e0b07a; }
+
+/* Functions */
+.hljs-title.function_,
+.hljs-title,
+.hljs-built_in { color: #82b8f5; }
+
+/* Types, classes */
+.hljs-title.class_,
+.hljs-type,
+.hljs-class .hljs-title { color: #5ed3c0; }
+
+/* Object keys, attributes, params */
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-variable.language_ { color: #a9f4ff; }
+
+/* Markup: tags & names (HTML/XML/JSX) */
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-selector-pseudo { color: #82b8f5; }
+
+/* Variables, template substitutions */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-subst { color: var(--color-text); }
+
+/* Preprocessor / decorators / annotations */
+.hljs-meta { color: #8b94a8; }
+
+/* Punctuation & operators */
+.hljs-operator,
+.hljs-punctuation { color: #94a3b8; }
+
+/* Diffs / emphasis */
+.hljs-deletion { color: #e0808a; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: var(--font-weight-semibold); }
+
+/* Explorer file icons â€” monochrome with cyan folders (single accent). */
+.tree-row .icon-folder { color: var(--color-accent-bright) !important; }
+.tree-row .icon-code { color: #cbd5e1 !important; }
+.tree-row .icon-config { color: #e2e8f0 !important; }
+.tree-row .icon-env { color: #94a3b8 !important; }
+.tree-row .icon-doc { color: #cbd5e1 !important; }
+.tree-row .icon-file { color: #94a3b8 !important; }
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  transition: color var(--motion-fast);
+}
+.tree-row:hover .tree-name {
+  color: var(--color-text);
+}
+.tree-row svg {
+  flex-shrink: 0;
+  transition: transform var(--motion-fast);
+}
+.tree-row:hover svg {
+  transform: scale(1.08);
+}
+
+/* === Editor area ========================================================= */
+.editor-area {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+}
+
+.editor-area__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  position: relative;
+}
+
+.editor-area__empty {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 72px 48px 64px;
+  overflow: auto;
+}
+
+/* A kept-alive skill page layer. Pages render their own `.apppage` (absolute,
+   inset:0) inside this, so each fills the editor body; only the active layer
+   is display:block, the rest stay mounted but hidden. */
+.editor-area__page {
+  position: absolute;
+  inset: 0;
+}
+
+/* === Bottom panel ======================================================== */
+.bottom-panel {
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.bottom-panel__tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 16px;
+  height: 36px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-shrink: 0;
+  background: rgba(var(--color-overlay-rgb), 0.005);
+}
+
+.bottom-panel__tab {
+  height: 100%;
+  padding: 0 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--color-text-dim);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+
+.bottom-panel__tab:hover {
+  color: var(--color-text-muted);
+}
+
+.bottom-panel__tab.is-active {
+  color: var(--color-accent-bright);
+  border-bottom-color: var(--color-accent);
+  box-shadow: 0 2px 6px -2px rgba(var(--color-accent-rgb), 0.35);
+}
+
+.bottom-panel__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bottom-panel__icon-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-dim);
+  transition: all var(--motion-fast);
+}
+
+
+.bottom-panel__icon-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.bottom-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* === Status bar ========================================================= */
+.status-bar {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  padding: 0 16px;
+  gap: 6px;
+  user-select: none;
+}
+
+.status-bar__crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-status-fg);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+
+.status-bar__crumb:hover {
+  background: rgba(var(--color-overlay-rgb), 0.03);
+  border-color: rgba(var(--color-overlay-rgb), 0.05);
+  color: var(--color-text);
+}
+
+.status-bar__sep {
+  color: var(--color-text-disabled);
+  margin: 0 1px;
+}
+
+.status-bar__spacer {
+  flex: 1;
+}
+
+.status-bar__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  height: 22px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-status-fg);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+
+.status-bar__chip:hover {
+  background: rgba(var(--color-overlay-rgb), 0.03);
+  border-color: rgba(var(--color-overlay-rgb), 0.05);
+  color: var(--color-text);
+}
+
+.status-bar__chip.is-danger {
+  color: var(--color-danger);
+  text-shadow: 0 0 6px rgba(229, 100, 95, 0.3);
+}
+
+.status-bar__chip.is-warn {
+  color: var(--color-warn);
+}
+
+.status-bar__chip.is-ok {
+  color: var(--color-ok);
+  text-shadow: 0 0 6px rgba(var(--color-overlay-rgb), 0.25);
+}
+
+/* === Resize handles ===================================================== */
+.resize-handle {
+  position: relative;
+  background: transparent;
+  flex-shrink: 0;
+  transition: background var(--motion-fast);
+}
+
+.resize-handle--vertical {
+  width: 3px;
+  cursor: col-resize;
+}
+
+.resize-handle--horizontal {
+  height: 3px;
+  cursor: row-resize;
+}
+
+.resize-handle:hover,
+.resize-handle[data-resize-handle-active] {
+  background: var(--color-accent);
+}
+
+/* === Premium polish (editor chrome) ====================================== */
+
+/* Resize handles glow while gripped so the drag feels alive. */
+.resize-handle[data-resize-handle-active] {
+  box-shadow: 0 0 12px rgba(var(--color-accent-rgb), 0.55);
+}
+
+/* Bottom-panel tabs: underline grows from the center instead of snapping. */
+.bottom-panel__tab {
+  position: relative;
+  border-bottom-color: transparent !important;
+}
+.bottom-panel__tab::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  transform: scaleX(0);
+  opacity: 0;
+  transition: transform var(--motion-medium), opacity var(--motion-fast);
+}
+.bottom-panel__tab.is-active::after {
+  transform: scaleX(1);
+  opacity: 1;
+}
+
+/* Current-line numbers brighten smoothly; errors pulse once. */
+.codeedit__num.is-error {
+  animation: numFlash 0.5s var(--ease-out) both;
+}
+@keyframes numFlash {
+  from { background: rgba(229, 100, 95, 0.18); }
+  to { background: transparent; }
+}
+
