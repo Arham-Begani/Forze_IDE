@@ -6,6 +6,7 @@ import {
   userMsg,
 } from '../lib/ai';
 import { findDestination, navManifest } from '../lib/assistantNav';
+import { actionManifest, findAction } from '../lib/assistantActions';
 import { parseWhen } from '../lib/parseWhen';
 import { usePromptSchedule } from './promptScheduleStore';
 import {
@@ -62,9 +63,23 @@ const SCHEDULE_DOCS =
   'convert it to a date yourself, just pass the phrase. Still write one friendly ' +
   'sentence of prose before the block.\n\nVibe Stations currently open:\n';
 
+const ACTION_DOCS =
+  '\n\nYou can also DO things, not just navigate. To act, add actions to the same ' +
+  'json block: {"actions":[{"action":"<verb>","args":{…}}]}. You may mix several ' +
+  'actions and an {"open":"<id>"} in one block. Always still write one short, ' +
+  'friendly sentence of prose before the block. Some actions ask the user to ' +
+  'confirm before they run — that is handled for you; just emit them and tell the ' +
+  'user what you are about to do. Available actions:\n' +
+  actionManifest();
+
 /** Built per-turn so the live list of open Vibe Stations is always current. */
 function buildSystem(): string {
-  return SYSTEM_BASE + SCHEDULE_DOCS + stationManifest(useVibeStations.getState().stations);
+  return (
+    SYSTEM_BASE +
+    ACTION_DOCS +
+    SCHEDULE_DOCS +
+    stationManifest(useVibeStations.getState().stations)
+  );
 }
 
 /** Strip the hidden json action block(s) so the user only reads the prose. */
@@ -86,25 +101,34 @@ export interface ScheduleAction {
   when: string;
 }
 
+/** A verb the model asked the manager to perform (see lib/assistantActions). */
+export interface AssistantActionCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
 interface ParsedActions {
   navIds: string[];
   schedules: ScheduleAction[];
+  actions: AssistantActionCall[];
 }
 
-/** Split a parsed action payload into nav ids and schedule actions. Tolerant of
- *  shapes: a bare action object, an array, or an `{actions:[...]}` wrapper. */
+/** Split a parsed action payload into nav ids, schedule actions, and verbs.
+ *  Tolerant of shapes: a bare action object, an array, or an `{actions:[...]}`
+ *  wrapper. */
 function collectActions(parsed: unknown): ParsedActions {
   const list: unknown[] = Array.isArray(parsed)
     ? parsed
     : isRecord(parsed)
       ? Array.isArray(parsed.actions)
         ? parsed.actions
-        : 'open' in parsed || 'target' in parsed || 'schedule' in parsed
+        : 'open' in parsed || 'target' in parsed || 'schedule' in parsed || 'action' in parsed
           ? [parsed]
           : []
       : [];
   const navIds: string[] = [];
   const schedules: ScheduleAction[] = [];
+  const actions: AssistantActionCall[] = [];
   for (const item of list) {
     if (typeof item === 'string') {
       navIds.push(item);
@@ -120,11 +144,16 @@ function collectActions(parsed: unknown): ParsedActions {
         }
         continue;
       }
+      const verb = item.action ?? item.verb ?? item.do;
+      if (typeof verb === 'string') {
+        actions.push({ name: verb, args: isRecord(item.args) ? item.args : {} });
+        continue;
+      }
       const id = item.open ?? item.target ?? item.id ?? item.destination;
       if (typeof id === 'string') navIds.push(id);
     }
   }
-  return { navIds, schedules };
+  return { navIds, schedules, actions };
 }
 
 /** Pull nav + schedule actions out of the model's json block. Tolerant of shapes. */
@@ -145,9 +174,9 @@ function parseActions(raw: string): ParsedActions {
       continue;
     }
     const result = collectActions(parsed);
-    if (result.navIds.length || result.schedules.length) return result;
+    if (result.navIds.length || result.schedules.length || result.actions.length) return result;
   }
-  return { navIds: [], schedules: [] };
+  return { navIds: [], schedules: [], actions: [] };
 }
 
 /** Format an epoch ms as a short local time for the confirmation line. */
@@ -180,13 +209,28 @@ function runScheduleActions(actions: ScheduleAction[]): string[] {
   return lines;
 }
 
+/** A high-impact action staged behind a confirm chip in the chat. */
+export interface PendingAction {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  /** Human label shown on the confirm chip. */
+  label: string;
+}
+
 interface AssistantState {
   messages: AssistantMessage[];
   streaming: boolean;
+  /** High-impact actions awaiting a one-tap confirm. */
+  pendingActions: PendingAction[];
   /** Send a user message, stream the reply, then run any navigation it asked for. */
   send: (text: string) => Promise<void>;
   /** Append a plain assistant note (used by the instant quick-open chips). */
   pushNote: (content: string) => void;
+  /** Run a staged high-impact action and report the result in chat. */
+  confirmAction: (id: string) => Promise<void>;
+  /** Drop a staged action without running it. */
+  dismissAction: (id: string) => void;
   stop: () => void;
   reset: () => void;
 }
@@ -198,14 +242,41 @@ let controller: AbortController | null = null;
 export const useAssistant = create<AssistantState>((set, get) => ({
   messages: [{ role: 'assistant', content: GREETING }],
   streaming: false,
+  pendingActions: [],
 
   pushNote: (content) =>
     set((s) => ({ messages: [...s.messages, { role: 'assistant', content }] })),
 
+  confirmAction: async (id) => {
+    const action = get().pendingActions.find((a) => a.id === id);
+    if (!action) return;
+    set((s) => ({ pendingActions: s.pendingActions.filter((a) => a.id !== id) }));
+    const def = findAction(action.name);
+    if (!def) return;
+    let line: string;
+    try {
+      line = await def.run(action.args);
+    } catch (err) {
+      line = `Couldn't do that — ${err instanceof Error ? err.message : String(err)}`;
+    }
+    set((s) => ({ messages: [...s.messages, { role: 'assistant', content: line }] }));
+  },
+
+  dismissAction: (id) =>
+    set((s) => {
+      const action = s.pendingActions.find((a) => a.id === id);
+      return {
+        pendingActions: s.pendingActions.filter((a) => a.id !== id),
+        messages: action
+          ? [...s.messages, { role: 'assistant', content: `Okay — skipped: ${action.label}.` }]
+          : s.messages,
+      };
+    }),
+
   stop: () => controller?.abort(),
 
   reset: () =>
-    set({ messages: [{ role: 'assistant', content: GREETING }], streaming: false }),
+    set({ messages: [{ role: 'assistant', content: GREETING }], streaming: false, pendingActions: [] }),
 
   send: async (text) => {
     const trimmed = text.trim();
@@ -263,8 +334,9 @@ export const useAssistant = create<AssistantState>((set, get) => ({
       return;
     }
 
-    // Finalise the visible prose, then perform the navigation / scheduling it asked for.
-    const { navIds, schedules } = parseActions(full);
+    // Finalise the visible prose, then perform the navigation / scheduling /
+    // actions it asked for.
+    const { navIds, schedules, actions } = parseActions(full);
     const opened: string[] = [];
     for (const id of navIds) {
       const dest = findDestination(id);
@@ -275,20 +347,47 @@ export const useAssistant = create<AssistantState>((set, get) => ({
     }
     const scheduleLines = runScheduleActions(schedules);
 
+    // Instant actions run now; high-impact ones are staged behind a confirm chip.
+    const actionLines: string[] = [];
+    const pending: PendingAction[] = [];
+    for (const call of actions) {
+      const def = findAction(call.name);
+      if (!def) continue;
+      if (def.impact === 'instant') {
+        try {
+          actionLines.push(await def.run(call.args));
+        } catch (err) {
+          actionLines.push(`Couldn't ${call.name} — ${err instanceof Error ? err.message : String(err)}`);
+        }
+      } else {
+        pending.push({
+          id: crypto.randomUUID(),
+          name: call.name,
+          args: call.args,
+          label: def.describe(call.args),
+        });
+      }
+    }
+
     const shown = visibleText(full);
+    const extras = [...scheduleLines, ...actionLines];
     let message: string;
     if (shown) {
-      // Prose + any scheduling confirmations appended.
-      message = scheduleLines.length ? `${shown}\n\n${scheduleLines.join('\n')}` : shown;
-    } else if (scheduleLines.length) {
-      message = scheduleLines.join('\n');
+      message = extras.length ? `${shown}\n\n${extras.join('\n')}` : shown;
+    } else if (extras.length) {
+      message = extras.join('\n');
     } else if (opened.length) {
       message = `Opening ${opened.join(' and ')}.`;
+    } else if (pending.length) {
+      message = 'Confirm below to go ahead.';
     } else {
       message = '…';
     }
     replaceLast(message);
-    set({ streaming: false });
+    set((s) => ({
+      streaming: false,
+      pendingActions: pending.length ? [...s.pendingActions, ...pending] : s.pendingActions,
+    }));
     controller = null;
   },
 }));
