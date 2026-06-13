@@ -60,7 +60,6 @@ async function persist(payload: ActiveBufferPayload): Promise<void> {
     // The fs_write_file command creates intermediate directories; if it
     // still fails (e.g., no Tauri shell) we silently drop — the IDE remains
     // functional, only the cross-process bridge degrades.
-    // eslint-disable-next-line no-console
     console.warn('[forze] mcp bridge write failed', err);
   }
 }
