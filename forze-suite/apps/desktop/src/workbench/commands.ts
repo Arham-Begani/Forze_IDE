@@ -40,7 +40,6 @@ class CommandRegistry {
   async run(id: string): Promise<void> {
     const command = this.commands.get(id);
     if (!command) {
-      // eslint-disable-next-line no-console
       console.warn(`[forze] unknown command: ${id}`);
       return;
     }
