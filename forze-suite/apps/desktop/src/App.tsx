@@ -13,7 +13,8 @@ import QuickOpen from './shell/QuickOpen';
 import FloatingAssistant from './shell/FloatingAssistant';
 import OnboardingWizard, { useOnboarding } from './shell/OnboardingWizard';
 import ErrorBoundary from './shell/ErrorBoundary';
-import { ToastHost } from './shell/toast';
+import { ToastHost, toast } from './shell/toast';
+import { ModalHost, showModal } from './shell/modal';
 import type { EditorHandle } from './views/EditorCanvas';
 import { useApplyTheme } from './theme/themeStore';
 import { useAgents } from './workbench/agentStore';
@@ -33,6 +34,7 @@ import { useDiagnostics } from './workbench/diagnosticsStore';
 import { useBipSchedule } from './workbench/bipScheduleStore';
 import { startBipScheduler } from './workbench/bipScheduler';
 import { startPromptScheduler } from './workbench/promptScheduler';
+import { startTeamSync } from './workbench/teamSync';
 import { computeSurvivalScore } from './workbench/survivalScore';
 import { useKeybindings, keybindingHint } from './workbench/keybindings';
 import { pickFolder } from './lib/dialog';
@@ -100,7 +102,6 @@ export default function App(): JSX.Element {
     try {
       if (workspaceRoot) void openWorkspace(workspaceRoot).catch(() => undefined);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[forze] openWorkspace on boot failed', err);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,7 +112,6 @@ export default function App(): JSX.Element {
     try {
       stop = startBipScheduler();
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[forze] build-in-public scheduler failed to start', err);
     }
     return () => {
@@ -128,8 +128,23 @@ export default function App(): JSX.Element {
     try {
       stop = startPromptScheduler();
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[forze] prompt scheduler failed to start', err);
+    }
+    return () => {
+      try {
+        stop();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let stop = () => undefined as void;
+    try {
+      stop = startTeamSync();
+    } catch (err) {
+      console.warn('[forze] team sync failed to start', err);
     }
     return () => {
       try {
@@ -238,7 +253,6 @@ export default function App(): JSX.Element {
           try {
             await saveActiveTab(value);
           } catch (err) {
-            // eslint-disable-next-line no-console
             console.error('[forze] save failed', err);
           }
         },
@@ -276,13 +290,30 @@ export default function App(): JSX.Element {
         title: 'Show Survival Score Breakdown',
         category: 'Forze',
         run: () => {
-          const lines = survival.breakdown
-            .map((b) => `${b.delta >= 0 ? '+' : ''}${b.delta}  ${b.label}`)
-            .join('\n');
-          // eslint-disable-next-line no-alert
-          window.alert(
-            `Venture Survival Score: ${survival.score} (${survival.band})\n\n${lines}`,
-          );
+          showModal({
+            title: 'Venture Survival Score',
+            body: (
+              <div className="score-modal">
+                <div className={`score-modal__hero score-modal__hero--${survival.band}`}>
+                  <span className="score-modal__value">{survival.score}</span>
+                  <span className="score-modal__band">{survival.band}</span>
+                </div>
+                <ul className="score-modal__list">
+                  {survival.breakdown.map((b) => (
+                    <li key={b.label} className="score-modal__row">
+                      <span className="score-modal__label">{b.label}</span>
+                      <span
+                        className={`score-modal__delta${b.delta < 0 ? ' is-negative' : ''}`}
+                      >
+                        {b.delta >= 0 ? '+' : ''}
+                        {b.delta}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ),
+          });
         },
       }),
       commands.register({
@@ -325,11 +356,21 @@ export default function App(): JSX.Element {
           );
           try {
             await navigator.clipboard.writeText(snippet);
-            // eslint-disable-next-line no-console
-            console.info('[forze] MCP config copied to clipboard');
-          } catch (err) {
-            // eslint-disable-next-line no-console
-            console.warn('[forze] clipboard write failed', err, snippet);
+            toast('MCP config copied — paste it into your external agent', 'success');
+          } catch {
+            // Clipboard can be blocked; show the snippet so the user can copy it
+            // by hand instead of silently swallowing the failure.
+            showModal({
+              title: 'MCP Config for External Agents',
+              body: (
+                <>
+                  <p className="modal__message">
+                    Copy this into your agent&apos;s MCP settings:
+                  </p>
+                  <pre className="modal__code">{snippet}</pre>
+                </>
+              ),
+            });
           }
         },
       }),
@@ -386,7 +427,21 @@ export default function App(): JSX.Element {
   }, []);
 
   const insertSnippetIntoActiveEditor = useCallback((snippet: string) => {
-    activeEditorRef.current?.insertAtCursor(snippet);
+    const handle = activeEditorRef.current;
+    if (handle) {
+      handle.insertAtCursor(snippet);
+      return;
+    }
+    // No code editor is mounted (e.g. a skill page is the active tab) — don't
+    // drop the generated snippet on the floor. Copy it so it can be pasted.
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(snippet).then(
+        () => toast('No file open — generated code copied to clipboard.', 'info'),
+        () => toast('Generated code is ready, but no editor is open to receive it.', 'warn'),
+      );
+    } else {
+      toast('Open a file in the editor to receive the generated code.', 'warn');
+    }
   }, []);
 
   return (
@@ -520,7 +575,7 @@ export default function App(): JSX.Element {
               }}
               onShowProblems={() => setBottomPanelTab('problems')}
               onShowScore={() => void commands.run('workbench.action.boardroom.simulate')}
-              onShowSchedule={() => openPage('ad-studio')}
+              onShowSchedule={() => openPage('build-in-public')}
               onShowSecurity={() => setActiveActivity('security')}
             />
           </ErrorBoundary>
@@ -531,6 +586,7 @@ export default function App(): JSX.Element {
       <FloatingAssistant />
       <OnboardingWizard />
       <ToastHost />
+      <ModalHost />
       <WindowResizers />
     </>
   );
