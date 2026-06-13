@@ -21,6 +21,9 @@ export default function FloatingAssistant(): JSX.Element {
   const send = useAssistant((s) => s.send);
   const stop = useAssistant((s) => s.stop);
   const pushNote = useAssistant((s) => s.pushNote);
+  const pendingActions = useAssistant((s) => s.pendingActions);
+  const confirmAction = useAssistant((s) => s.confirmAction);
+  const dismissAction = useAssistant((s) => s.dismissAction);
 
   const [input, setInput] = useState('');
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -111,6 +114,32 @@ export default function FloatingAssistant(): JSX.Element {
         >
           <KeyRound size={12} /> Add an AI key in Settings to chat
         </button>
+      )}
+
+      {pendingActions.length > 0 && (
+        <div className="fassist__confirms">
+          {pendingActions.map((a) => (
+            <div key={a.id} className="fassist__confirm">
+              <span className="fassist__confirm-label">{a.label}</span>
+              <div className="fassist__confirm-btns">
+                <button
+                  type="button"
+                  className="fassist__confirm-yes"
+                  onClick={() => void confirmAction(a.id)}
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  className="fassist__confirm-no"
+                  onClick={() => dismissAction(a.id)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       <div className="fassist__chips">
