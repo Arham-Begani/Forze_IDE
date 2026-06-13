@@ -4,7 +4,6 @@ import { ActivityBar } from '@/components/shell/ActivityBar';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { StatusBar } from '@/components/shell/StatusBar';
 import { TopBar } from '@/components/shell/TopBar';
-import { AdStudioView } from '@/components/views/AdStudioView';
 import { AgentView } from '@/components/views/AgentView';
 import { AnalyticsView } from '@/components/views/AnalyticsView';
 import { CodeView } from '@/components/views/CodeView';
@@ -29,7 +28,6 @@ export default function HomePage() {
         {active === 'agent' && <AgentView />}
         {active === 'preview' && <PreviewView />}
         {active === 'deployments' && <DeploymentsView />}
-        {active === 'ad-studio' && <AdStudioView />}
         {active === 'analytics' && <AnalyticsView />}
         {active === 'database' && <DatabaseView />}
         {active === 'team' && <TeamView />}
