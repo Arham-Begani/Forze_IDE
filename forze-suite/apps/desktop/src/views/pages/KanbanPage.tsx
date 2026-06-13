@@ -10,6 +10,7 @@ import {
   type Priority,
 } from '../../workbench/kanbanStore';
 import { useTeam, type Member } from '../../workbench/teamStore';
+import { confirmModal } from '../../shell/modal';
 
 const initials = (name: string): string =>
   name
@@ -131,13 +132,16 @@ export default function KanbanPage(): JSX.Element {
     setAddingColumn(false);
   };
 
-  const removeLane = (lane: LaneDef) => {
+  const removeLane = async (lane: LaneDef) => {
     const count = byLane.get(lane.id)?.length ?? 0;
-    if (
-      count > 0 &&
-      !window.confirm(`Delete “${lane.label}” and its ${count} card${count === 1 ? '' : 's'}?`)
-    ) {
-      return;
+    if (count > 0) {
+      const ok = await confirmModal({
+        title: 'Delete column',
+        message: `Delete “${lane.label}” and its ${count} card${count === 1 ? '' : 's'}?`,
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!ok) return;
     }
     deleteLane(lane.id);
   };
@@ -258,7 +262,7 @@ export default function KanbanPage(): JSX.Element {
                       type="button"
                       title="Delete column"
                       className="kb-lane__del"
-                      onClick={() => removeLane(lane)}
+                      onClick={() => void removeLane(lane)}
                     >
                       <Trash2 size={13} />
                     </button>
