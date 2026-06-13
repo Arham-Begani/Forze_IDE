@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { GeminiProvider } from '@forze/agents';
 import { useAgents } from '../workbench/agentStore';
 import { resolveApiKey } from '../workbench/aiConfig';
@@ -14,41 +14,84 @@ interface SketchPayload {
   dataUrl: string;
 }
 
+/** Gemini's inline image budget is generous, but very large data URLs bloat the
+ *  request and slow the round-trip. Keep mockups reasonable. */
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+
 /**
- * Drag-and-drop a mockup image; the IDE sends it to Gemini's vision model and
- * pipes the generated Tailwind JSX into the active editor buffer at the cursor.
- * Uses the built-in Gemini key (or the user's own) via the shared key resolver,
- * so it works out of the box. Falls back to a deterministic snippet only if the
- * model returns nothing usable.
+ * Drag, paste, or browse for a mockup image; the IDE sends it to Gemini's vision
+ * model and pipes the generated Tailwind JSX into the active editor buffer at
+ * the cursor (falling back to the clipboard when no file is open). Uses the
+ * built-in Gemini key (or the user's own) via the shared key resolver, so it
+ * works out of the box. Falls back to a deterministic snippet only if the model
+ * returns nothing usable.
  */
 export default function VibeCanvas({ onInsertCode }: VibeCanvasProps): JSX.Element {
   const [isDragging, setIsDragging] = useState(false);
   const [sketch, setSketch] = useState<SketchPayload | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const apiKeys = useAgents((s) => s.apiKeys);
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
 
-  const onDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-    const file = event.dataTransfer.files[0];
-    if (!file || !file.type.startsWith('image/')) {
+  const loadImageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) {
       setLastError('Drop an image file (PNG, JPG, SVG, or WebP).');
       return;
     }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setLastError(
+        `That image is ${formatBytes(file.size)} — keep it under ` +
+          `${formatBytes(MAX_IMAGE_BYTES)} for the vision model.`,
+      );
+      return;
+    }
     const dataUrl = await readAsDataUrl(file);
-    setSketch({ fileName: file.name, size: file.size, dataUrl });
+    setSketch({ fileName: file.name || 'pasted-image.png', size: file.size, dataUrl });
     setLastError(null);
+    setStatus(null);
   }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      setIsDragging(false);
+      const file = event.dataTransfer.files[0];
+      if (file) void loadImageFile(file);
+    },
+    [loadImageFile],
+  );
+
+  const onPaste = useCallback(
+    (event: React.ClipboardEvent<HTMLDivElement>) => {
+      const item = Array.from(event.clipboardData.items).find((i) =>
+        i.type.startsWith('image/'),
+      );
+      const file = item?.getAsFile();
+      if (file) {
+        event.preventDefault();
+        void loadImageFile(file);
+      }
+    },
+    [loadImageFile],
+  );
+
+  const onPick = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (file) void loadImageFile(file);
+      event.target.value = ''; // let the same file be re-picked later
+    },
+    [loadImageFile],
+  );
 
   const generate = useCallback(async () => {
     if (!sketch) return;
     const key = resolveApiKey(GeminiProvider.id, apiKeys);
     if (!key) {
-      setLastError(
-        'No Gemini key available. Add one in Settings → Agent providers.',
-      );
+      setLastError('No Gemini key available. Add one in Settings → Agent providers.');
       setActiveActivity('settings');
       return;
     }
@@ -61,16 +104,19 @@ export default function VibeCanvas({ onInsertCode }: VibeCanvasProps): JSX.Eleme
 
     setIsGenerating(true);
     setLastError(null);
+    setStatus(null);
     try {
       const raw = await GeminiProvider.generateVision({
         apiKey: key,
         prompt: VISION_PROMPT,
         imageBase64: parsed.base64,
         mimeType: parsed.mimeType,
-        maxTokens: 4096,
+        maxTokens: 8192,
       });
       const snippet = stripCodeFences(raw) || buildPlaceholderSnippet(sketch.fileName);
       onInsertCode(snippet);
+      const lines = snippet.split('\n').length;
+      setStatus(`Sent ${lines} line${lines === 1 ? '' : 's'} of JSX to your editor.`);
     } catch (err) {
       setLastError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -78,16 +124,35 @@ export default function VibeCanvas({ onInsertCode }: VibeCanvasProps): JSX.Eleme
     }
   }, [apiKeys, onInsertCode, setActiveActivity, sketch]);
 
+  const clear = useCallback(() => {
+    setSketch(null);
+    setLastError(null);
+    setStatus(null);
+  }, []);
+
   return (
     <section className="panel">
       <h2>Vibe Canvas</h2>
       <p className="muted">
-        Drop a mockup or sketch. The vision pipeline returns Tailwind JSX and
-        inserts it at the cursor in your active editor tab.
+        Drop, paste, or browse for a mockup. The vision pipeline returns Tailwind
+        JSX and inserts it at the cursor in your active editor tab.
       </p>
+
+      <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onPick} />
 
       <div
         className={`dropzone ${isDragging ? 'is-active' : ''}`}
+        role="button"
+        tabIndex={0}
+        aria-label="Drop, paste, or click to choose a mockup image"
+        onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
+        onPaste={onPaste}
         onDragOver={(event) => {
           event.preventDefault();
           setIsDragging(true);
@@ -104,28 +169,22 @@ export default function VibeCanvas({ onInsertCode }: VibeCanvasProps): JSX.Eleme
             />
             <div style={{ marginTop: 12 }}>
               <strong>{sketch.fileName}</strong>{' '}
-              <span className="muted">({Math.round(sketch.size / 1024)} KB)</span>
+              <span className="muted">({formatBytes(sketch.size)})</span>
             </div>
           </div>
         ) : (
-          <span>Drop a mockup image here to translate it into a layout.</span>
+          <span>Drop, paste, or click to choose a mockup image.</span>
         )}
       </div>
 
       {lastError && <p style={{ color: 'var(--color-danger)' }}>{lastError}</p>}
+      {status && !lastError && <p style={{ color: 'var(--color-ok)' }}>{status}</p>}
 
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" onClick={generate} disabled={!sketch || isGenerating}>
           {isGenerating ? 'Generating…' : 'Generate & insert at cursor'}
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            setSketch(null);
-            setLastError(null);
-          }}
-          disabled={!sketch || isGenerating}
-        >
+        <button type="button" onClick={clear} disabled={!sketch || isGenerating}>
           Clear
         </button>
       </div>
@@ -165,6 +224,11 @@ function readAsDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
     reader.readAsDataURL(file);
   });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 function buildPlaceholderSnippet(fileName: string): string {
