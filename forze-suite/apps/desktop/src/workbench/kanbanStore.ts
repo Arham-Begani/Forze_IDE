@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useProject } from './projectStore';
 
 /**
  * The shared Kanban board. It lives in its own store (separate from the Team
@@ -35,7 +36,17 @@ export interface Card {
   label?: string;
   /** Id of a teamStore member, or undefined when unassigned. */
   assigneeId?: string;
+  /** Id of the Agent Manager agent this card mirrors, if the card was created by
+   *  the AI manager. Lets the mission→Kanban bridge move the card live as the
+   *  agent's status changes. Undefined for hand-created cards. */
+  agentId?: string;
+  /** Id of the mission that spawned this card (for grouping / cleanup). */
+  missionId?: string;
 }
+
+/** A coarse column role the AI mirror maps an agent's status onto. Lanes are
+ *  user-defined, so we resolve a concrete laneId from one of these at runtime. */
+export type LaneBucket = 'todo' | 'doing' | 'done';
 
 export const PRIORITIES: { id: Priority; label: string; color: string }[] = [
   { id: 'low', label: 'Low', color: '#22c55e' },
@@ -60,6 +71,38 @@ const defaultLanes = (): LaneDef[] => [
   { id: 'lane-done', label: 'Done', color: '#22c55e' },
 ];
 
+/**
+ * Each workspace folder gets its *own* board (VS Code-style workspace state):
+ * the persisted storage key is derived from the workspace root, so switching
+ * folders switches boards. With no folder open, a separate scratch board is
+ * used. Slashes are normalized so the same folder always maps to one board.
+ */
+const KANBAN_KEY = 'forze.kanban.v4';
+const boardKey = (root: string | null): string =>
+  root ? `${KANBAN_KEY}::${root.replace(/\\/g, '/')}` : `${KANBAN_KEY}::__no-workspace__`;
+
+const storageOrNull = (): Storage | null =>
+  typeof localStorage === 'undefined' ? null : localStorage;
+
+/** One-time adoption: boards created before per-workspace scoping lived under
+ *  the bare legacy key. The first *workspace* board to load takes it over —
+ *  that's the folder the user was looking at when the board was built. */
+function adoptLegacyBoard(key: string): void {
+  const ls = storageOrNull();
+  if (!ls) return;
+  try {
+    const legacy = ls.getItem(KANBAN_KEY);
+    if (!legacy) return;
+    if (!ls.getItem(key)) ls.setItem(key, legacy);
+    ls.removeItem(KANBAN_KEY);
+  } catch {
+    /* storage unavailable — nothing to migrate */
+  }
+}
+
+let activeBoardKey = boardKey(useProject.getState().workspaceRoot);
+if (useProject.getState().workspaceRoot) adoptLegacyBoard(activeBoardKey);
+
 interface KanbanState {
   lanes: LaneDef[];
   cards: Card[];
@@ -75,6 +118,16 @@ interface KanbanState {
 
   // --- cards ---
   addCard: (laneId: string, title: string) => void;
+  /** Like addCard but accepts extra fields (priority/label/agent link) and
+   *  returns the new card's id so callers can track it (used by the AI mirror). */
+  addLinkedCard: (input: {
+    title: string;
+    laneId: string;
+    agentId?: string;
+    missionId?: string;
+    priority?: Priority;
+    label?: string;
+  }) => string;
   /** Move/reorder a card. Drops it before `beforeId`, or appends to `toLaneId`
    *  when `beforeId` is null. Works within a lane and across lanes. */
   moveCard: (id: string, toLaneId: string, beforeId: string | null) => void;
@@ -147,6 +200,35 @@ export const useKanban = create<KanbanState>()(
           return { cards };
         }),
 
+      addLinkedCard: (input) => {
+        const id = newCardId();
+        const title = input.title.trim();
+        if (!title || !input.laneId) return id;
+        set((state) => {
+          const card: Card = {
+            id,
+            title,
+            laneId: input.laneId,
+            priority: input.priority ?? 'medium',
+            label: input.label,
+            agentId: input.agentId,
+            missionId: input.missionId,
+          };
+          // Same bottom-of-lane insertion as addCard.
+          const cards = [...state.cards];
+          let insertAt = cards.length;
+          for (let i = cards.length - 1; i >= 0; i--) {
+            if (cards[i]!.laneId === input.laneId) {
+              insertAt = i + 1;
+              break;
+            }
+          }
+          cards.splice(insertAt, 0, card);
+          return { cards };
+        });
+        return id;
+      },
+
       moveCard: (id, toLaneId, beforeId) =>
         set((state) => {
           if (id === beforeId) return state;
@@ -192,12 +274,59 @@ export const useKanban = create<KanbanState>()(
           return changed ? { cards } : state;
         }),
     }),
-    // v3: dropped the seeded demo cards and hardcoded stages. Lanes are now
-    // user-defined; a fresh board gets generic editable starter columns. The
-    // key bump clears the earlier dummy/empty state on first load.
-    { name: 'forze.kanban.v3' },
+    // v4: cards gained optional agentId/missionId links so the AI manager can
+    // mirror an Architect plan onto the board and move cards live. Older cards
+    // simply have those fields undefined — no migration needed; the key bump is
+    // only to be explicit about the shape change.
+    { name: activeBoardKey },
   ),
 );
+
+// Re-key the board when the workspace root changes *without* a window reload
+// (first folder opened from empty, or the workspace being closed — switching
+// between two folders reloads the window, so boot handles that case). Order
+// matters: point persistence at the new key BEFORE touching state, so neither
+// the old board nor the new one gets clobbered by a write to the wrong key.
+useProject.subscribe((state) => {
+  const key = boardKey(state.workspaceRoot);
+  if (key === activeBoardKey) return;
+  activeBoardKey = key;
+  if (state.workspaceRoot) adoptLegacyBoard(key);
+  useKanban.persist.setOptions({ name: key });
+  if (storageOrNull()?.getItem(key)) {
+    void useKanban.persist.rehydrate();
+  } else {
+    // Nothing saved for this workspace yet — start it on a fresh board (the
+    // write this triggers lands under the new key).
+    useKanban.setState({ lanes: defaultLanes(), cards: [] });
+  }
+});
+
+/**
+ * Resolve a concrete laneId for a coarse bucket, robust to the fact that lanes
+ * are fully user-editable (renamed, recolored, reordered, deleted). Tries, in
+ * order: the original seeded ids, a label keyword match, then an ordinal slot.
+ * Returns '' only when the board has no lanes at all (caller should skip).
+ */
+export function resolveLane(bucket: LaneBucket): string {
+  const lanes = useKanban.getState().lanes;
+  if (lanes.length === 0) return '';
+
+  const seededId = { todo: 'lane-todo', doing: 'lane-doing', done: 'lane-done' }[bucket];
+  if (lanes.some((l) => l.id === seededId)) return seededId;
+
+  const matches = (label: string): boolean => {
+    const t = label.toLowerCase();
+    if (bucket === 'todo') return /to ?do|backlog|new|queue/.test(t);
+    if (bucket === 'doing') return /progress|doing|wip|active|building/.test(t);
+    return /done|complete|ship|review|finish/.test(t);
+  };
+  const labelHit = lanes.find((l) => matches(l.label));
+  if (labelHit) return labelHit.id;
+
+  const ordinal = bucket === 'todo' ? 0 : bucket === 'doing' ? 1 : lanes.length - 1;
+  return lanes[Math.min(ordinal, lanes.length - 1)]!.id;
+}
 
 /** Stable color for a label chip, derived from its text. */
 const LABEL_COLORS = ['#38bdf8', '#a855f7', '#f59e0b', '#22c55e', '#ef4444', '#ec4899', '#14b8a6', '#6366f1'];
