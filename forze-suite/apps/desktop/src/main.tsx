@@ -12,11 +12,9 @@ if (!rootElement) {
 // Surface unhandled errors/rejections in the console rather than dying silently
 // in the Tauri webview (helps diagnose the "keeps crashing" class of bugs).
 window.addEventListener('error', (e) => {
-  // eslint-disable-next-line no-console
   console.error('[forze] window error:', e.error ?? e.message);
 });
 window.addEventListener('unhandledrejection', (e) => {
-  // eslint-disable-next-line no-console
   console.error('[forze] unhandled rejection:', e.reason);
 });
 
