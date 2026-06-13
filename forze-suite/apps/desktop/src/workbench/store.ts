@@ -14,7 +14,7 @@ export type ActivityId =
   | 'dashboard'
   | 'analytics'
   | 'deployments'
-  | 'ad-studio'
+  | 'build-in-public'
   | 'vibe-stations'
   | 'community'
   | 'team'
@@ -35,7 +35,7 @@ export const ALL_ACTIVITY_IDS: readonly ActivityId[] = [
   'dashboard',
   'analytics',
   'deployments',
-  'ad-studio',
+  'build-in-public',
   'vibe-stations',
   'community',
   'team',
@@ -56,7 +56,7 @@ export const DOCKABLE_PANELS: ActivityId[] = [
   'dashboard',
   'analytics',
   'deployments',
-  'ad-studio',
+  'build-in-public',
   'community',
   'team',
 ];
@@ -73,7 +73,7 @@ export const PAGE_TITLES: Partial<Record<ActivityId, string>> = {
   dashboard: 'Dashboard',
   analytics: 'Analytics',
   deployments: 'Deployments',
-  'ad-studio': 'Ad Studio',
+  'build-in-public': 'Build in Public',
   'vibe-stations': 'Vibe Stations',
   community: 'Community',
   team: 'Team',
@@ -152,6 +152,10 @@ interface WorkbenchState {
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   markTabDirty: (id: string, isDirty: boolean) => void;
+  /** Close every editor tab back to a single Welcome tab. Used when switching
+   *  to a different workspace folder, so the old project's open files don't
+   *  bleed into the new one (VS Code's "Open Folder" resets the editor). */
+  resetWorkspaceTabs: () => void;
 
   setCommandPaletteOpen: (open: boolean) => void;
   setQuickOpen: (open: boolean, seed?: string) => void;
@@ -181,7 +185,7 @@ const KNOWN_BOTTOM_TABS = new Set<BottomPanelTab>([
  * is reset to a safe default. Runs on every rehydrate via the persist `merge`,
  * so existing broken state self-heals on the next load.
  */
-function sanitizePersisted(
+export function sanitizePersisted(
   persisted: Partial<WorkbenchState>,
 ): Partial<WorkbenchState> {
   const next: Partial<WorkbenchState> = { ...persisted };
@@ -319,6 +323,9 @@ export const useWorkbench = create<WorkbenchState>()(
         }),
 
       setActiveTab: (id) => set({ activeTabId: id }),
+
+      resetWorkspaceTabs: () =>
+        set({ editorTabs: [DEFAULT_TAB], activeTabId: DEFAULT_TAB.id }),
 
       markTabDirty: (id, isDirty) =>
         set((state) => ({
