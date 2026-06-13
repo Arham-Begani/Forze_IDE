@@ -12,6 +12,7 @@ import {
 } from '../lib/pty';
 import { useTheme } from '../theme/themeStore';
 import { useVibeStations } from '../workbench/vibeStationsStore';
+import { buildLaunchKeystroke, prepareStationLaunch } from '../lib/agentBus';
 import { xtermThemeFor } from './XtermView';
 
 /** xterm always reports ≥1 after a successful fit; guard against a stray 0. */
@@ -60,12 +61,16 @@ export default function VibeTerminal({
   stationId,
   cwd,
   launchCommand,
+  busStation,
 }: {
   /** Owning station id — used to mirror this terminal's pty session into the
    *  store so the prompt scheduler can write to it from outside the component. */
   stationId: string;
   cwd: string | null;
   launchCommand?: string;
+  /** When the Context Bus is enabled, this station's bus identity. Drives
+   *  per-station MCP config + identity env injected at launch. */
+  busStation?: { root: string; agentId: string; label: string };
 }): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -74,6 +79,15 @@ export default function VibeTerminal({
   const disposedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const theme = useTheme((s) => s.theme);
+
+  // The agent CLI launches a few seconds after mount (prompt-settle + launch
+  // queue), by which time the bus-enabled poll has resolved — but the spawn
+  // effect below captures props at *mount*. Mirror busStation into a ref kept
+  // current every render so the launch reads the up-to-date identity, not the
+  // stale value from before `enabled` flipped true. Without this, stations
+  // restored on boot race the poll and launch anonymous ("unknown-agent").
+  const busStationRef = useRef(busStation);
+  busStationRef.current = busStation;
 
   // Recolor an already-mounted terminal when the IDE theme changes; xterm
   // can't read the CSS tokens itself, so we hand it the matching palette.
@@ -110,6 +124,7 @@ export default function VibeTerminal({
           stationId,
           cwd,
           launchCommand,
+          () => busStationRef.current,
           termRef,
           fitRef,
           ptyIdRef,
@@ -117,7 +132,6 @@ export default function VibeTerminal({
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // eslint-disable-next-line no-console
         console.error('[forze vibe terminal] init failed', err);
         setError(message);
         termRef.current?.write(
@@ -225,6 +239,7 @@ async function initialiseTerminal(
   stationId: string,
   cwd: string | null,
   launchCommand: string | undefined,
+  getBusStation: () => { root: string; agentId: string; label: string } | undefined,
   termRef: React.MutableRefObject<Terminal | null>,
   fitRef: React.MutableRefObject<FitAddon | null>,
   ptyIdRef: React.MutableRefObject<string | null>,
@@ -288,13 +303,35 @@ async function initialiseTerminal(
     // liveness when our turn comes up — the station may have closed while we
     // waited in the queue.
     enqueueAgentLaunch(() => {
-      if (disposedRef.current) return;
-      const liveId = ptyIdRef.current;
-      if (!liveId) return;
-      void writePty(liveId, `${launchCommand}\r`).catch(() => undefined);
-      // The agent CLI is now booting — mark the station ready-able (the
-      // scheduler waits READY_GRACE_MS past this before typing a prompt).
-      useVibeStations.getState().markStationLaunched(stationId);
+      void (async () => {
+        if (disposedRef.current || !ptyIdRef.current) return;
+        // When the bus is on, write this station's per-station MCP config (so
+        // its identity survives the MCP env allowlist) and build the command
+        // (e.g. `claude --mcp-config <file>`) plus the identity env exports.
+        // Read the identity *now* (launch time), not at mount — see busStationRef.
+        let keystroke = launchCommand;
+        const busStation = getBusStation();
+        if (busStation) {
+          try {
+            const { command, env } = await prepareStationLaunch(
+              busStation.root,
+              busStation.agentId,
+              busStation.label,
+              launchCommand,
+            );
+            keystroke = buildLaunchKeystroke(command, env);
+          } catch {
+            keystroke = launchCommand;
+          }
+        }
+        if (disposedRef.current) return;
+        const liveId = ptyIdRef.current;
+        if (!liveId) return;
+        void writePty(liveId, `${keystroke}\r`).catch(() => undefined);
+        // The agent CLI is now booting — mark the station ready-able (the
+        // scheduler waits READY_GRACE_MS past this before typing a prompt).
+        useVibeStations.getState().markStationLaunched(stationId);
+      })();
     });
   };
 
@@ -332,7 +369,6 @@ async function initialiseTerminal(
     const ptyId = ptyIdRef.current;
     if (!ptyId) return;
     void writePty(ptyId, data).catch((err) => {
-      // eslint-disable-next-line no-console
       console.error('[forze vibe terminal] write failed', err);
     });
   });
