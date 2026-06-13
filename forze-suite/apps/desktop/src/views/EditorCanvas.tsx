@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useDeferredValue,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -11,6 +12,25 @@ import { formatCode } from '../lib/format';
 import { computeLineDiff } from '../lib/lineDiff';
 import { toast } from '../shell/toast';
 import type { StackTraceLine } from '@forze/shared/diagnostics';
+
+/** Auto-closing pairs: typing the opener inserts the closer and keeps the caret
+ *  between them. Quotes are symmetric (the opener equals the closer). */
+const PAIRS: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
+const CLOSERS = new Set([')', ']', '}']);
+const QUOTES = new Set(['"', "'", '`']);
+
+/** True when `open`/`close` form a matching bracket or quote pair. */
+function isPair(open: string | undefined, close: string | undefined): boolean {
+  if (!open || !close) return false;
+  return PAIRS[open] === close || (QUOTES.has(open) && open === close);
+}
+
+/** Leading whitespace of the line that contains offset `pos` in `text`. */
+function lineIndent(text: string, pos: number): string {
+  const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+  const match = /^[ \t]*/.exec(text.slice(lineStart, pos));
+  return match ? match[0] : '';
+}
 
 export interface EditorHandle {
   insertAtCursor: (snippet: string) => void;
@@ -63,7 +83,17 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
     }, [initialValue]);
 
     const lineCount = useMemo(() => value.split('\n').length, [value]);
-    const highlighted = useMemo(() => highlight(value, language), [value, language]);
+    // Re-tokenizing the whole buffer with highlight.js is the editor's most
+    // expensive work. Defer it off the keystroke path: the textarea (caret +
+    // selection) commits immediately, while the coloured <pre> underneath
+    // repaints at lower priority. On small files the deferred value tracks
+    // `value` in the same frame; on large files React skips intermediate
+    // highlights during a fast burst instead of blocking every keystroke.
+    const deferredValue = useDeferredValue(value);
+    const highlighted = useMemo(
+      () => highlight(deferredValue, language),
+      [deferredValue, language],
+    );
     const diff = useMemo(
       () => (diffBaseline == null ? null : computeLineDiff(diffBaseline, value)),
       [diffBaseline, value],
@@ -183,18 +213,139 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
       [value],
     );
 
+    /** Replace the buffer and restore a selection once React has committed the
+     *  new controlled value (the textarea reflects `value` only after re-render,
+     *  so the caret must be set on the next frame). */
+    const commit = (next: string, selStart: number, selEnd = selStart): void => {
+      update(next);
+      requestAnimationFrame(() => {
+        const ta = taRef.current;
+        if (!ta) return;
+        ta.focus();
+        ta.setSelectionRange(selStart, selEnd);
+      });
+    };
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-      // Tab inserts two spaces instead of moving focus.
-      if (e.key === 'Tab') {
+      const ta = e.currentTarget;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const hasSelection = start !== end;
+      const key = e.key;
+      const before = value[start - 1];
+      const after = value[end];
+
+      // --- Tab: indent. Multi-line selection indents/outdents the block;
+      //     otherwise insert two spaces. Shift+Tab outdents the current line. ---
+      if (key === 'Tab') {
         e.preventDefault();
-        const ta = e.currentTarget;
-        const start = ta.selectionStart;
-        const end = ta.selectionEnd;
-        const next = value.slice(0, start) + '  ' + value.slice(end);
-        update(next);
-        requestAnimationFrame(() => {
-          ta.selectionStart = ta.selectionEnd = start + 2;
-        });
+        const selText = value.slice(start, end);
+        const multiline = hasSelection && selText.includes('\n');
+        if (multiline || e.shiftKey) {
+          const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+          const block = value.slice(lineStart, end);
+          if (e.shiftKey) {
+            const outdented = block.replace(/^( {1,2}|\t)/gm, '');
+            const removed = block.length - outdented.length;
+            commit(
+              value.slice(0, lineStart) + outdented + value.slice(end),
+              Math.max(lineStart, start - Math.min(2, removed)),
+              end - removed,
+            );
+          } else {
+            const indented = block.replace(/^/gm, '  ');
+            const addedFirst = 2;
+            const addedTotal = indented.length - block.length;
+            commit(
+              value.slice(0, lineStart) + indented + value.slice(end),
+              start + addedFirst,
+              end + addedTotal,
+            );
+          }
+          return;
+        }
+        commit(value.slice(0, start) + '  ' + value.slice(end), start + 2);
+        return;
+      }
+
+      // --- Enter: keep the current line's indentation; add a level after an
+      //     opener, and split a {} / [] / () pair onto its own closing line. ---
+      if (key === 'Enter') {
+        e.preventDefault();
+        const indent = lineIndent(value, start);
+        const opensBlock = before != null && '([{'.includes(before);
+        if (opensBlock && isPair(before, after)) {
+          const inner = '\n' + indent + '  ';
+          const outer = '\n' + indent;
+          commit(
+            value.slice(0, start) + inner + outer + value.slice(end),
+            start + inner.length,
+          );
+        } else if (opensBlock) {
+          const ins = '\n' + indent + '  ';
+          commit(value.slice(0, start) + ins + value.slice(end), start + ins.length);
+        } else {
+          const ins = '\n' + indent;
+          commit(value.slice(0, start) + ins + value.slice(end), start + ins.length);
+        }
+        return;
+      }
+
+      // --- Opening bracket: auto-close, wrapping any selection. ---
+      if (PAIRS[key]) {
+        e.preventDefault();
+        const close = PAIRS[key];
+        if (hasSelection) {
+          commit(
+            value.slice(0, start) + key + value.slice(start, end) + close + value.slice(end),
+            start + 1,
+            end + 1,
+          );
+        } else {
+          commit(value.slice(0, start) + key + close + value.slice(end), start + 1);
+        }
+        return;
+      }
+
+      // --- Closing bracket: type over an auto-inserted closer instead of
+      //     stacking a duplicate. Pure caret move, no buffer change. ---
+      if (CLOSERS.has(key) && !hasSelection && after === key) {
+        e.preventDefault();
+        ta.setSelectionRange(start + 1, start + 1);
+        return;
+      }
+
+      // --- Quotes: wrap a selection, type over a matching closer, or auto-pair.
+      //     Don't auto-pair right after a word character (e.g. an apostrophe in
+      //     don't) — that would insert a stray closing quote. ---
+      if (QUOTES.has(key)) {
+        if (hasSelection) {
+          e.preventDefault();
+          commit(
+            value.slice(0, start) + key + value.slice(start, end) + key + value.slice(end),
+            start + 1,
+            end + 1,
+          );
+          return;
+        }
+        if (after === key) {
+          e.preventDefault();
+          ta.setSelectionRange(start + 1, start + 1);
+          return;
+        }
+        if (before == null || !/[\w]/.test(before)) {
+          e.preventDefault();
+          commit(value.slice(0, start) + key + key + value.slice(end), start + 1);
+          return;
+        }
+        return;
+      }
+
+      // --- Backspace between an empty pair removes both halves. ---
+      if (key === 'Backspace' && !hasSelection && start > 0 && isPair(before, after)) {
+        e.preventDefault();
+        commit(value.slice(0, start - 1) + value.slice(start + 1), start - 1);
+        return;
       }
     };
 
