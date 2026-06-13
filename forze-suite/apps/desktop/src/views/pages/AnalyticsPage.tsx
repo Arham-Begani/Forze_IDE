@@ -1,32 +1,41 @@
-import { Activity, Award, Code2, Flame, TrendingUp } from 'lucide-react';
-import { achievements, kpis, revenueSeries } from '../../workbench/appData';
+import { Activity, Award, Code2, Flame, GitCommitHorizontal, Lock, TrendingUp } from 'lucide-react';
 import { AreaSpark, BarMini } from './charts';
-import { useWorkspaceMetrics } from '../../workbench/useWorkspaceMetrics';
+import { useBuilderAnalytics } from '../../workbench/builderAnalytics';
 import { formatBytes, formatCount } from '../../lib/projectMetrics';
 
-const userSeries = [
-  { label: 'Mon', value: 412 },
-  { label: 'Tue', value: 528 },
-  { label: 'Wed', value: 491 },
-  { label: 'Thu', value: 612 },
-  { label: 'Fri', value: 720 },
-  { label: 'Sat', value: 380 },
-  { label: 'Sun', value: 442 },
-];
-
-const builderMetrics = [
-  ['Build streak', '12 days'],
-  ['Deploys', '142'],
-  ['Revenue', '$24.5K'],
-  ['Users', '12.4K'],
-  ['Launches', '3'],
-  ['Coding hours', '482'],
-  ['Reputation', '1,847'],
-];
-
 export default function AnalyticsPage(): JSX.Element {
-  const { metrics, loading } = useWorkspaceMetrics();
+  const a = useBuilderAnalytics();
+  const metrics = a.metrics;
+  const loading = a.metricsLoading;
   const maxLoc = metrics?.languages.reduce((m, l) => Math.max(m, l.loc), 0) ?? 0;
+
+  const commitsLabel = a.commitsCapped ? `${a.totalCommits}+` : String(a.totalCommits);
+  const avgWeekly = Math.round(
+    a.commitsPerWeek.reduce((s, w) => s + w.value, 0) / Math.max(1, a.commitsPerWeek.length),
+  );
+  const lastWeek = a.commitsPerWeek[a.commitsPerWeek.length - 1]?.value ?? 0;
+  const priorWeek = a.commitsPerWeek[a.commitsPerWeek.length - 2]?.value ?? 0;
+  const trend = lastWeek - priorWeek;
+
+  const kpis = [
+    { label: 'Commits', value: a.hasRepo ? commitsLabel : '—', delta: `${a.commitsThisWeek} this week` },
+    { label: 'Build streak', value: a.hasRepo ? `${a.streakDays}d` : '—', delta: a.streakDays > 0 ? 'active' : 'start one' },
+    { label: 'Tasks done', value: `${a.tasks.done}`, delta: `${a.tasks.doing + a.tasks.todo} open` },
+    { label: 'Reputation', value: formatCount(a.reputation), delta: `${a.posts} posts` },
+  ];
+
+  const builderMetrics: [string, string][] = [
+    ['Total commits', a.hasRepo ? commitsLabel : '—'],
+    ['Commits this week', String(a.commitsThisWeek)],
+    ['Build streak', `${a.streakDays} day${a.streakDays === 1 ? '' : 's'}`],
+    ['Tasks done', `${a.tasks.done} / ${a.tasks.total}`],
+    ['In progress', String(a.tasks.doing)],
+    ['Reputation', formatCount(a.reputation)],
+    ['Scheduled posts', String(a.scheduledPosts)],
+    ['Open problems', String(a.problems)],
+  ];
+
+  const earnedCount = a.achievements.filter((x) => x.earned).length;
 
   return (
     <div className="apppage">
@@ -35,7 +44,7 @@ export default function AnalyticsPage(): JSX.Element {
           <h1 className="apppage__title">
             <Activity size={20} strokeWidth={1.8} /> Analytics
           </h1>
-          <p className="apppage__subtitle">Product, revenue, growth, and builder metrics.</p>
+          <p className="apppage__subtitle">Real build activity, codebase, and momentum.</p>
         </div>
       </div>
 
@@ -71,6 +80,7 @@ export default function AnalyticsPage(): JSX.Element {
             )}
           </div>
         )}
+
         <div className="grid grid-4">
           {kpis.map((k) => (
             <div className="kpi" key={k.label}>
@@ -83,12 +93,28 @@ export default function AnalyticsPage(): JSX.Element {
 
         <div className="grid grid-2">
           <div className="appcard">
-            <h3 className="appcard__title">Revenue (MRR)</h3>
-            <AreaSpark data={revenueSeries} />
+            <h3 className="appcard__title">Build Momentum · commits / week</h3>
+            {a.hasRepo && a.hasMomentum ? (
+              <AreaSpark
+                data={a.commitsPerWeek}
+                seriesLabel="Commits / week"
+                format={(v) => `${v} commit${v === 1 ? '' : 's'}`}
+              />
+            ) : (
+              <p className="muted" style={{ padding: '24px 4px' }}>
+                {a.hasRepo
+                  ? 'No commits in the last 8 weeks yet.'
+                  : 'Open a Git repo to chart commit momentum.'}
+              </p>
+            )}
           </div>
           <div className="appcard">
-            <h3 className="appcard__title">New users this week</h3>
-            <BarMini data={userSeries} />
+            <h3 className="appcard__title">Commits this week</h3>
+            {a.hasRepo ? (
+              <BarMini data={a.commitsPerDay} />
+            ) : (
+              <p className="muted" style={{ padding: '24px 4px' }}>No repository open.</p>
+            )}
           </div>
         </div>
 
@@ -103,25 +129,31 @@ export default function AnalyticsPage(): JSX.Element {
             ))}
           </div>
           <div className="appcard">
-            <h3 className="appcard__title"><Award size={14} style={{ verticalAlign: -2, marginRight: 6, color: 'var(--color-accent)' }} />Achievements</h3>
+            <h3 className="appcard__title">
+              <Award size={14} style={{ verticalAlign: -2, marginRight: 6, color: 'var(--color-accent)' }} />
+              Achievements <span className="dim" style={{ fontSize: 11 }}>· {earnedCount}/{a.achievements.length}</span>
+            </h3>
             <div className="grid grid-3">
-              {achievements.map((a) => (
+              {a.achievements.map((ach) => (
                 <div
-                  key={a.id}
+                  key={ach.id}
+                  title={ach.earned ? 'Unlocked' : ach.hint}
                   style={{
                     padding: 12,
                     borderRadius: 'var(--radius-md)',
-                    border: `1px solid ${a.earned ? 'var(--color-accent-border)' : 'var(--color-border)'}`,
+                    border: `1px solid ${ach.earned ? 'var(--color-accent-border)' : 'var(--color-border)'}`,
                     background: 'var(--color-bg-elevated)',
-                    opacity: a.earned ? 1 : 0.55,
+                    opacity: ach.earned ? 1 : 0.55,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
                     fontSize: 'var(--font-size-sm)',
                   }}
                 >
-                  <Award size={14} color={a.earned ? 'var(--color-accent)' : 'var(--color-text-dim)'} />
-                  {a.label}
+                  {ach.earned
+                    ? <Award size={14} color="var(--color-accent)" />
+                    : <Lock size={13} color="var(--color-text-dim)" />}
+                  {ach.label}
                 </div>
               ))}
             </div>
@@ -129,12 +161,26 @@ export default function AnalyticsPage(): JSX.Element {
         </div>
 
         <div className="appcard">
-          <h3 className="appcard__title"><TrendingUp size={14} style={{ verticalAlign: -2, marginRight: 6, color: 'var(--color-ok)' }} />Growth Forecast</h3>
-          <p className="muted">
-            At current activation × MRR/cohort, you reach <strong style={{ color: 'var(--color-text)' }}>$50K MRR</strong> in ~14 weeks.
-            Last Product Hunt push added <strong style={{ color: 'var(--color-text)' }}>+612</strong> users and{' '}
-            <strong style={{ color: 'var(--color-ok)' }}>+$1,840 MRR</strong>.
-          </p>
+          <h3 className="appcard__title"><TrendingUp size={14} style={{ verticalAlign: -2, marginRight: 6, color: 'var(--color-ok)' }} />Momentum Insight</h3>
+          {a.hasRepo ? (
+            <p className="muted">
+              You're averaging <strong style={{ color: 'var(--color-text)' }}>{avgWeekly} commit{avgWeekly === 1 ? '' : 's'}/week</strong> over the last 8 weeks
+              {a.streakDays > 0 && <> on a <strong style={{ color: 'var(--color-warn)' }}>{a.streakDays}-day streak</strong></>}.{' '}
+              {trend > 0 ? (
+                <>This week is <strong style={{ color: 'var(--color-ok)' }}>up {trend}</strong> vs last — momentum building.</>
+              ) : trend < 0 ? (
+                <>This week is <strong style={{ color: 'var(--color-text)' }}>{Math.abs(trend)} behind</strong> last week — a couple commits closes the gap.</>
+              ) : (
+                <>Hold the line with a commit today to keep the trend up.</>
+              )}
+              {a.tasks.doing > 0 && <> {a.tasks.doing} task{a.tasks.doing === 1 ? '' : 's'} in progress on the board.</>}
+            </p>
+          ) : (
+            <p className="muted">
+              <GitCommitHorizontal size={13} style={{ verticalAlign: -2, marginRight: 6 }} />
+              Open a Git repository to see your real build momentum and forecast.
+            </p>
+          )}
         </div>
       </div>
     </div>
