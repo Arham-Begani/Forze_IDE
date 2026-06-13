@@ -23,7 +23,6 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    // eslint-disable-next-line no-console
     console.error(`[forze] render error${this.props.scope ? ` in ${this.props.scope}` : ''}:`, error, info);
   }
 
