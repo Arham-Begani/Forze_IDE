@@ -15,8 +15,10 @@ import {
   repoRoot as gitRepoRoot,
   status as gitStatus,
 } from '../lib/git';
+import { confirmDialog } from '../lib/dialog';
 import { noteChange } from './commitGuard';
 import { useProject } from './projectStore';
+import { useVibeStations } from './vibeStationsStore';
 import { useWorkbench } from './store';
 
 /**
@@ -27,12 +29,24 @@ import { useWorkbench } from './store';
 
 export async function openWorkspace(root: string): Promise<void> {
   const project = useProject.getState();
+  const previousRoot = project.workspaceRoot;
+
+  // Switching to a *different* folder behaves like VS Code's "Open Folder":
+  // the whole window re-initializes against the new root so every view, editor,
+  // terminal, and skill page reopens fresh for the new project. Guarded on a
+  // real change so the boot-time re-open of the persisted root
+  // (previousRoot === root) and the first open from empty (previousRoot === null)
+  // take the normal in-place path below.
+  if (previousRoot && previousRoot !== root) {
+    await switchWorkspace(root);
+    return;
+  }
+
   project.setWorkspace(root);
 
   try {
     await startWatching(root);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[forze] fs_watch failed:', err);
   }
 
@@ -47,6 +61,48 @@ export async function openWorkspace(root: string): Promise<void> {
     project.setIsGitRepo(false);
     project.setBranch(null);
   }
+}
+
+/**
+ * Switch the IDE to a different workspace folder, VS Code "Open Folder"-style:
+ * persist the new root, reset the workspace-scoped state that's keyed to the old
+ * project (open editor tabs + cached buffers, the Vibe Stations' working dirs),
+ * then reload the window so everything re-initializes against the new folder.
+ *
+ * A hard reload (rather than an in-place re-render) is what makes "everything
+ * opens again": the explorer, git status, terminals, and skill pages all boot
+ * fresh from `App`'s mount path against the new root, exactly as on first launch.
+ */
+async function switchWorkspace(root: string): Promise<void> {
+  // Guard unsaved work, just like reloading the window in VS Code — the reload
+  // discards in-memory editor buffers.
+  const dirty = useWorkbench.getState().editorTabs.filter((t) => t.isDirty);
+  if (dirty.length > 0) {
+    const ok = await confirmDialog(
+      `You have ${dirty.length} unsaved file${dirty.length > 1 ? 's' : ''}. ` +
+        'Opening a different folder reloads the window and discards unsaved changes. Continue?',
+      'Open Folder',
+    );
+    if (!ok) return;
+  }
+
+  // Persist the new root and reset the old project's workspace-scoped state.
+  // These stores write to localStorage synchronously, so the values are durable
+  // before the reload below tears the page down.
+  useProject.getState().setWorkspace(root); // also clears the buffer cache
+  useWorkbench.getState().resetWorkspaceTabs();
+  // Re-point the (persisted) Vibe Stations at the new root so they re-spawn
+  // there after the reload instead of in the old folder.
+  useVibeStations.getState().rescope(root);
+
+  // Stop watching the old root before the reload pulls everything down.
+  try {
+    await stopWatching();
+  } catch {
+    /* noop */
+  }
+
+  window.location.reload();
 }
 
 export async function closeWorkspace(): Promise<void> {
@@ -76,7 +132,6 @@ export async function ensureFileLoaded(filePath: string): Promise<void> {
     const contents = await readFile(filePath);
     useProject.getState().setBuffer(filePath, contents);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[forze] read failed', filePath, err);
     useProject.getState().setBuffer(
       filePath,
