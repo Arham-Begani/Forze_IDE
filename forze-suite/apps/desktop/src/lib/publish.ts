@@ -3,7 +3,7 @@ import { invokeCommand } from './tauri';
 import { useIntegrations } from '../workbench/integrationsStore';
 
 /**
- * LinkedIn publishing for the Ad Studio's Build-in-Public post.
+ * LinkedIn publishing for the Build in Public page's posts.
  *
  * Connecting runs the full "Log in with LinkedIn" OAuth flow in Rust
  * (`linkedin_login` opens the browser, captures the redirect, and exchanges the
