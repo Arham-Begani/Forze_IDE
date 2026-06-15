@@ -1,0 +1,26 @@
+name: Notify landing page
+
+# When the product feature docs change, tell the Forze marketing repo to re-sync the
+# /ide landing page. Requires a LANDING_DISPATCH_TOKEN secret (a PAT that can POST a
+# repository_dispatch to Arham-Begani/Forze).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'features.md'
+      - 'README.md'
+      - 'ide_plan.md'
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Forze landing-page sync
+        run: |
+          curl -fsSL -X POST \
+            -H "Authorization: Bearer ${{ secrets.LANDING_DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/Arham-Begani/Forze/dispatches \
+            -d '{"event_type":"ide-features-updated","client_payload":{"ref":"${{ github.sha }}"}}'
