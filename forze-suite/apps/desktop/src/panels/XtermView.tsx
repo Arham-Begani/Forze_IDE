@@ -1,6 +1,5 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
 import { useEffect, useRef, useState } from 'react';
 import {
   killPty,
@@ -11,68 +10,11 @@ import {
 } from '../lib/pty';
 import { useTerminals, type TerminalSession } from '../workbench/terminalStore';
 import { useTheme } from '../theme/themeStore';
+import { createForzeTerminal, xtermThemeFor } from './terminalKit';
 
 /** xterm always reports ≥1 after a successful fit; guard against a stray 0. */
 function dims(term: Terminal): { cols: number; rows: number } {
   return { cols: Math.max(1, term.cols), rows: Math.max(1, term.rows) };
-}
-
-/** ANSI palette for the dark themes (the matte-black canvas). */
-const DARK_XTERM_THEME = {
-  background: '#050505',
-  foreground: '#e4e4e7',
-  cursor: '#ffffff',
-  cursorAccent: '#050505',
-  selectionBackground: 'rgba(255, 255, 255, 0.18)',
-  black: '#050505',
-  red: '#ff7170',
-  green: '#7ee787',
-  yellow: '#d7d7d7',
-  blue: '#00d4ff',
-  magenta: '#74ecff',
-  cyan: '#9cdcfe',
-  white: '#dcdde6',
-  brightBlack: '#5a5d68',
-  brightRed: '#ff9090',
-  brightGreen: '#9ae6a4',
-  brightYellow: '#e5e5e5',
-  brightBlue: '#74ecff',
-  brightMagenta: '#a9f4ff',
-  brightCyan: '#c9efff',
-  brightWhite: '#f4f4f7',
-} as const;
-
-/** ANSI palette for the Daylight (light) theme — white canvas, dark ink. */
-const LIGHT_XTERM_THEME = {
-  background: '#ffffff',
-  foreground: '#1f2328',
-  cursor: '#0e7490',
-  cursorAccent: '#ffffff',
-  selectionBackground: 'rgba(14, 116, 144, 0.18)',
-  black: '#24292f',
-  red: '#cf222e',
-  green: '#116329',
-  yellow: '#7d4e00',
-  blue: '#0969da',
-  magenta: '#8250df',
-  cyan: '#1b7c83',
-  white: '#6e7781',
-  brightBlack: '#57606a',
-  brightRed: '#a40e26',
-  brightGreen: '#1a7f37',
-  brightYellow: '#633c01',
-  brightBlue: '#218bff',
-  brightMagenta: '#a475f9',
-  brightCyan: '#3192aa',
-  brightWhite: '#8c959f',
-} as const;
-
-/** xterm paints to a canvas, so it can't read CSS tokens — pick the palette
- *  off the active theme id on the root element instead. */
-export function xtermThemeFor(): typeof DARK_XTERM_THEME | typeof LIGHT_XTERM_THEME {
-  return document.documentElement.dataset.theme === 'forze-daylight'
-    ? LIGHT_XTERM_THEME
-    : DARK_XTERM_THEME;
 }
 
 /**
@@ -262,42 +204,7 @@ async function initialiseTerminal(
   ptyIdRef: React.MutableRefObject<string | null>,
   setPtySessionId: (id: string, ptySessionId: string) => void,
 ): Promise<void> {
-  const term = new Terminal({
-    fontFamily:
-      "'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, monospace",
-    fontSize: 12.5,
-    lineHeight: 1.35,
-    letterSpacing: 0,
-    cursorBlink: true,
-    cursorStyle: 'bar',
-    allowProposedApi: true,
-    // Each scrollback line is a retained cell buffer; a grid of terminals at
-    // 8000 lines was a real memory sink. 1500 keeps plenty of history.
-    scrollback: 1500,
-    theme: xtermThemeFor(),
-  });
-
-  const fit = new FitAddon();
-  term.loadAddon(fit);
-  term.loadAddon(new WebLinksAddon());
-
-  // Ctrl+L / Cmd+K: clear the screen, shell-agnostic. xterm's own clear wipes
-  // the scrollback and keeps the current prompt line, so it works the same
-  // whether the shell understands `clear`, `cls`, or neither.
-  term.attachCustomKeyEventHandler((e) => {
-    if (e.type !== 'keydown') return true;
-    const isClear =
-      (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'l' || e.key === 'L')) ||
-      (e.metaKey && (e.key === 'k' || e.key === 'K'));
-    if (isClear) {
-      term.clear();
-      return false; // don't forward the keystroke to the PTY
-    }
-    return true;
-  });
-
-  term.open(container);
-  fit.fit();
+  const { term, fit } = createForzeTerminal(container, { fontSize: 12.5 });
   const { cols: safeCols, rows: safeRows } = dims(term);
 
   termRef.current = term;
