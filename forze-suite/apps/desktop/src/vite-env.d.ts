@@ -8,6 +8,14 @@ interface ImportMetaEnv {
    * bring-your-own-key like Claude. See workbench/aiConfig.ts.
    */
   readonly VITE_FORZE_GEMINI_KEY?: string;
+  /**
+   * Forze account auth + cloud persistence. Same Supabase project as the web
+   * app (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY). The anon key
+   * is safe to ship — Row Level Security is the boundary, not key secrecy.
+   * See lib/supabase.ts.
+   */
+  readonly VITE_SUPABASE_URL?: string;
+  readonly VITE_SUPABASE_ANON_KEY?: string;
 }
 
 interface ImportMeta {
