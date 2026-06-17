@@ -61,7 +61,6 @@ export default function App(): JSX.Element {
   const toggleBottomPanel = useWorkbench((s) => s.toggleBottomPanel);
   const setCommandPaletteOpen = useWorkbench((s) => s.setCommandPaletteOpen);
   const setQuickOpen = useWorkbench((s) => s.setQuickOpen);
-  const activeTabId = useWorkbench((s) => s.activeTabId);
   const closeTab = useWorkbench((s) => s.closeTab);
   const editorTabs = useWorkbench((s) => s.editorTabs);
 
@@ -98,6 +97,13 @@ export default function App(): JSX.Element {
       scheduledPostsCount,
     ],
   );
+
+  // Mirror survival into a ref so the command registration effect below can read
+  // the latest score at run time WITHOUT listing `survival` as a dependency —
+  // otherwise every score change (problems count, a dirtied tab, opening a repo)
+  // tears down and re-registers all ~22 commands for nothing.
+  const survivalRef = useRef(survival);
+  survivalRef.current = survival;
 
   useEffect(() => {
     try {
@@ -246,7 +252,8 @@ export default function App(): JSX.Element {
         category: 'File',
         keybinding: keybindingHint('workbench.action.closeActiveEditor'),
         run: () => {
-          if (activeTabId) closeTab(activeTabId);
+          const id = useWorkbench.getState().activeTabId;
+          if (id) closeTab(id);
         },
       }),
       commands.register({
@@ -296,16 +303,17 @@ export default function App(): JSX.Element {
         title: 'Show Survival Score Breakdown',
         category: 'Forze',
         run: () => {
+          const s = survivalRef.current;
           showModal({
             title: 'Venture Survival Score',
             body: (
               <div className="score-modal">
-                <div className={`score-modal__hero score-modal__hero--${survival.band}`}>
-                  <span className="score-modal__value">{survival.score}</span>
-                  <span className="score-modal__band">{survival.band}</span>
+                <div className={`score-modal__hero score-modal__hero--${s.band}`}>
+                  <span className="score-modal__value">{s.score}</span>
+                  <span className="score-modal__band">{s.band}</span>
                 </div>
                 <ul className="score-modal__list">
-                  {survival.breakdown.map((b) => (
+                  {s.breakdown.map((b) => (
                     <li key={b.label} className="score-modal__row">
                       <span className="score-modal__label">{b.label}</span>
                       <span
@@ -415,6 +423,8 @@ export default function App(): JSX.Element {
     }
 
     return () => unregs.forEach((u) => u());
+    // All deps are stable zustand actions (and survival/activeTabId are now read
+    // via ref/getState at run time), so commands register exactly once on mount.
   }, [
     setCommandPaletteOpen,
     setQuickOpen,
@@ -422,9 +432,7 @@ export default function App(): JSX.Element {
     toggleBottomPanel,
     setBottomPanelTab,
     setActiveActivity,
-    activeTabId,
     closeTab,
-    survival,
     resetOnboarding,
   ]);
 
