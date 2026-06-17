@@ -1,4 +1,9 @@
 {
+  "name": "forze-ide-root",
+  "private": true,
+  "scripts": {
+    "release": "node scripts/release.mjs"
+  },
   "dependencies": {
     "@tauri-apps/plugin-process": "^2.3.1"
   }
