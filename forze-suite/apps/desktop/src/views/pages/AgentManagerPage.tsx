@@ -138,6 +138,13 @@ export default function AgentManagerPage(): JSX.Element {
         model: activeModel,
         status: 'queued',
       });
+      window.pendo?.trackAgent("prompt", {
+        agentId: "vOFeFP-T_ajHgq0RPJm2ewyl2gM",
+        conversationId: id,
+        messageId: crypto.randomUUID(),
+        content: task,
+        modelUsed: activeModel,
+      });
       setActiveAgent(id);
       setSpawnRole(null);
       void runAgentById(id);
@@ -339,7 +346,15 @@ export default function AgentManagerPage(): JSX.Element {
                 active={agent.id === activeAgentId}
                 onSelect={() => setActiveAgent(agent.id)}
                 onStop={() => stop(agent.id)}
-                onRetry={() => void runAgentById(agent.id)}
+                onRetry={() => {
+                  window.pendo?.trackAgent("user_reaction", {
+                    agentId: "vOFeFP-T_ajHgq0RPJm2ewyl2gM",
+                    conversationId: agent.missionId || agent.id,
+                    messageId: agent.id,
+                    content: "retry",
+                  });
+                  void runAgentById(agent.id);
+                }}
                 onRemove={() => removeAgent(agent.id)}
               />
             ))}
@@ -376,8 +391,25 @@ export default function AgentManagerPage(): JSX.Element {
           agent={activeAgent}
           onClose={() => setActiveAgent(null)}
           onStop={() => stop(activeAgent.id)}
-          onRetry={() => void runAgentById(activeAgent.id)}
-          onFollowUp={(text) => void runAgentById(activeAgent.id, { followUp: text })}
+          onRetry={() => {
+            window.pendo?.trackAgent("user_reaction", {
+              agentId: "vOFeFP-T_ajHgq0RPJm2ewyl2gM",
+              conversationId: activeAgent.missionId || activeAgent.id,
+              messageId: activeAgent.id,
+              content: "retry",
+            });
+            void runAgentById(activeAgent.id);
+          }}
+          onFollowUp={(text) => {
+            window.pendo?.trackAgent("prompt", {
+              agentId: "vOFeFP-T_ajHgq0RPJm2ewyl2gM",
+              conversationId: activeAgent.missionId || activeAgent.id,
+              messageId: crypto.randomUUID(),
+              content: text,
+              modelUsed: activeAgent.model,
+            });
+            void runAgentById(activeAgent.id, { followUp: text });
+          }}
         />
       )}
     </div>
