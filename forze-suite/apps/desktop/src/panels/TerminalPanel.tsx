@@ -24,48 +24,44 @@ export default function TerminalPanel(): JSX.Element {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {sessions.length > 1 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '4px 8px',
-            borderBottom: '1px solid var(--color-border)',
-            background: 'var(--color-bg-elevated)',
-          }}
-        >
+        <div className="term-strip" role="tablist" aria-label="Terminals">
           {sessions.map((session) => (
-            <button
+            <div
               key={session.id}
-              type="button"
-              className={`bottom-panel__tab ${
+              role="tab"
+              aria-selected={session.id === activeId}
+              tabIndex={0}
+              className={`term-strip__tab ${
                 session.id === activeId ? 'is-active' : ''
               }`}
-              style={{ height: 22, padding: '0 8px' }}
               onClick={() => setActiveTerminal(session.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setActiveTerminal(session.id);
+                }
+              }}
             >
+              <span className="term-strip__dot" aria-hidden />
               {session.title}
-              <span
-                style={{
-                  marginLeft: 6,
-                  opacity: 0.6,
-                  cursor: 'pointer',
-                }}
+              <button
+                type="button"
+                className="term-strip__close"
+                aria-label={`Close ${session.title}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   closeTerminal(session.id);
                 }}
               >
-                <X size={10} />
-              </span>
-            </button>
+                <X size={11} />
+              </button>
+            </div>
           ))}
           <button
             type="button"
-            className="bottom-panel__icon-btn"
+            className="bottom-panel__icon-btn term-strip__new"
             title="New terminal"
             onClick={() => createTerminal(workspaceRoot ?? null)}
-            style={{ marginLeft: 'auto' }}
           >
             <Plus size={14} />
           </button>
