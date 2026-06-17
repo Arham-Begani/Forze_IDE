@@ -17,7 +17,7 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tauri::{command, AppHandle};
-use tauri_plugin_shell::ShellExt;
+use tauri_plugin_opener::OpenerExt;
 
 /// Loopback redirect — must match the redirect URL registered in the LinkedIn app.
 const REDIRECT_PORT: u16 = 8911;
@@ -235,8 +235,8 @@ pub async fn linkedin_login(app: AppHandle) -> Result<LinkedinSession, String> {
         url_encode(SCOPES),
     );
 
-    app.shell()
-        .open(auth_url, None)
+    app.opener()
+        .open_url(auth_url, None::<&str>)
         .map_err(|e| format!("Couldn't open the browser for LinkedIn login: {e}"))?;
 
     let expected_state = state.clone();
