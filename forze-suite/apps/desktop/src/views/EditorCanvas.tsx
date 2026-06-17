@@ -74,6 +74,7 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
     const taRef = useRef<HTMLTextAreaElement | null>(null);
     const preRef = useRef<HTMLPreElement | null>(null);
     const gutterRef = useRef<HTMLDivElement | null>(null);
+    const activeLineRef = useRef<HTMLDivElement | null>(null);
 
     // Re-seed when the file changes. EditorArea remounts via key={tabId}, but
     // this keeps us correct if that ever changes.
@@ -81,6 +82,14 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
       setValue(initialValue);
       setErrorLines(new Set());
     }, [initialValue]);
+
+    // Re-align the active-line band after the buffer (re)renders — typing,
+    // formatting, or a fresh file all move the caret's row.
+    useEffect(() => {
+      // updateActiveLine reads live refs; re-run whenever the text changes.
+      const id = requestAnimationFrame(updateActiveLine);
+      return () => cancelAnimationFrame(id);
+    }, [value]);
 
     const lineCount = useMemo(() => value.split('\n').length, [value]);
     // Re-tokenizing the whole buffer with highlight.js is the editor's most
@@ -99,6 +108,21 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
       [diffBaseline, value],
     );
 
+    // Height of one editor row — kept in sync with the 20px line-height in
+    // editor.css (.codeedit, .codeedit__pre/.codeedit__ta, .codeedit__activeline).
+    const LINE_HEIGHT = 20;
+
+    /** Slide the active-line band to the caret's row. Imperative on purpose:
+     *  it runs on every caret move and scroll, and a React state update there
+     *  would re-render the whole gutter for nothing. */
+    const updateActiveLine = (): void => {
+      const ta = taRef.current;
+      const band = activeLineRef.current;
+      if (!ta || !band) return;
+      const caretLine = ta.value.slice(0, ta.selectionStart).split('\n').length;
+      band.style.transform = `translateY(${(caretLine - 1) * LINE_HEIGHT - ta.scrollTop}px)`;
+    };
+
     const syncScroll = (): void => {
       const ta = taRef.current;
       if (!ta) return;
@@ -109,6 +133,7 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
       if (gutterRef.current) {
         gutterRef.current.style.transform = `translateY(${-ta.scrollTop}px)`;
       }
+      updateActiveLine();
     };
 
     const update = (next: string): void => {
@@ -377,6 +402,7 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
           <pre className="codeedit__pre" ref={preRef} aria-hidden>
             {highlighted}
           </pre>
+          <div className="codeedit__activeline" ref={activeLineRef} aria-hidden />
           <textarea
             ref={taRef}
             className="codeedit__ta"
@@ -388,6 +414,10 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
             onChange={(e) => update(e.target.value)}
             onScroll={syncScroll}
             onKeyDown={handleKeyDown}
+            onKeyUp={updateActiveLine}
+            onClick={updateActiveLine}
+            onFocus={updateActiveLine}
+            onSelect={updateActiveLine}
           />
         </div>
       </div>
