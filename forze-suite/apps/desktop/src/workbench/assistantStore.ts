@@ -8,6 +8,7 @@ import {
 import { findDestination, navManifest } from '../lib/assistantNav';
 import { actionManifest, findAction } from '../lib/assistantActions';
 import { parseWhen } from '../lib/parseWhen';
+import { appendMessage, createConversation } from '../lib/sync';
 import { usePromptSchedule } from './promptScheduleStore';
 import {
   parseStationLabel,
@@ -223,8 +224,12 @@ interface AssistantState {
   streaming: boolean;
   /** High-impact actions awaiting a one-tap confirm. */
   pendingActions: PendingAction[];
+  /** Cloud thread id this chat persists to (null until the first synced turn). */
+  cloudConversationId: string | null;
   /** Send a user message, stream the reply, then run any navigation it asked for. */
   send: (text: string) => Promise<void>;
+  /** Replace the chat with history pulled from the cloud on sign-in. */
+  hydrateFromCloud: (conversationId: string, messages: AssistantMessage[]) => void;
   /** Append a plain assistant note (used by the instant quick-open chips). */
   pushNote: (content: string) => void;
   /** Run a staged high-impact action and report the result in chat. */
@@ -243,6 +248,20 @@ export const useAssistant = create<AssistantState>((set, get) => ({
   messages: [{ role: 'assistant', content: GREETING }],
   streaming: false,
   pendingActions: [],
+  cloudConversationId: null,
+
+  hydrateFromCloud: (conversationId, messages) =>
+    set((s) => {
+      // Only adopt cloud history when the user hasn't started chatting yet
+      // (still just the seeded greeting), so a live session is never clobbered.
+      if (s.messages.length > 1) {
+        return { cloudConversationId: s.cloudConversationId ?? conversationId };
+      }
+      return {
+        messages: messages.length ? messages : s.messages,
+        cloudConversationId: conversationId,
+      };
+    }),
 
   pushNote: (content) =>
     set((s) => ({ messages: [...s.messages, { role: 'assistant', content }] })),
@@ -276,7 +295,12 @@ export const useAssistant = create<AssistantState>((set, get) => ({
   stop: () => controller?.abort(),
 
   reset: () =>
-    set({ messages: [{ role: 'assistant', content: GREETING }], streaming: false, pendingActions: [] }),
+    set({
+      messages: [{ role: 'assistant', content: GREETING }],
+      streaming: false,
+      pendingActions: [],
+      cloudConversationId: null,
+    }),
 
   send: async (text) => {
     const trimmed = text.trim();
@@ -389,5 +413,29 @@ export const useAssistant = create<AssistantState>((set, get) => ({
       pendingActions: pending.length ? [...s.pendingActions, ...pending] : s.pendingActions,
     }));
     controller = null;
+
+    // Persist the turn to the cloud — conversation text + metadata only, never
+    // file contents. Fire-and-forget; a no-op when no account is signed in.
+    void (async () => {
+      try {
+        let convoId = get().cloudConversationId;
+        if (!convoId) {
+          convoId = await createConversation({
+            title: trimmed.slice(0, 60),
+            agent: activeProvider()?.id ?? 'forze-assistant',
+          });
+          if (convoId) set({ cloudConversationId: convoId });
+        }
+        if (!convoId) return; // sync off / signed out
+        await appendMessage(convoId, { role: 'user', content: trimmed });
+        await appendMessage(convoId, {
+          role: 'assistant',
+          content: message,
+          metadata: { provider: activeProvider()?.id ?? null },
+        });
+      } catch (err) {
+        console.warn('[forze] persist assistant turn failed', err);
+      }
+    })();
   },
 }));
