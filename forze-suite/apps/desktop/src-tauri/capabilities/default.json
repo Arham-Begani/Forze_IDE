@@ -17,6 +17,7 @@
     "core:window:allow-start-resize-dragging",
     "core:app:default",
     "shell:allow-open",
+    "opener:default",
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
