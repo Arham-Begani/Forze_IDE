@@ -8,12 +8,20 @@
 }
 
 .apppage__header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 34px 40px 26px;
   border-bottom: 1px solid var(--color-border-subtle);
+  /* Frosted obsidian glass: the title bar stays put and the page content
+     scrolls under it with a soft blur instead of sliding away. */
+  background: color-mix(in srgb, var(--color-editor-bg) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
 .apppage__title {
@@ -58,7 +66,8 @@
 }
 .appcard:hover {
   border-color: rgba(var(--color-accent-rgb), 0.25);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card), 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
 }
 
 .appcard__title {
@@ -96,7 +105,7 @@
 .kpi:hover {
   border-color: rgba(var(--color-accent-rgb), 0.25);
   transform: translateY(-2px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+  box-shadow: var(--shadow-card), 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
 }
 .kpi__label {
   font-size: var(--font-size-xs);
@@ -444,9 +453,13 @@
   animation: expandIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* --- Card hover lift enhancement --- */
-.card, .appcard, .kpi, .feature-card {
-  will-change: transform, box-shadow;
+/* --- Card hover lift enhancement ---
+   Only hint the compositor while a card is actually being hovered. A standing
+   will-change on every card permanently promotes dozens of glass layers to
+   their own GPU buffer (memory + paint cost) for an effect that's idle 99% of
+   the time. */
+.card:hover, .appcard:hover, .kpi:hover, .feature-card:hover {
+  will-change: transform;
 }
 
 /* --- Chat bubble entrance --- */
