@@ -46,6 +46,7 @@ export default function SettingsView(): JSX.Element {
     setSigningOut(true);
     try {
       await supabase.auth.signOut();
+      pendo.clearSession();
       // Drop the cloud mirror + chat so the next account starts clean. AuthGate's
       // onAuthStateChange returns the app to the locked sign-in screen.
       useCloud.getState().reset();

@@ -5,6 +5,8 @@ import AuthGate from './AuthGate';
 import './index.css';
 import ErrorBoundary from './shell/ErrorBoundary';
 
+pendo.initialize({ visitor: { id: '' } });
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error('Forze IDE: missing #root element in index.html');
