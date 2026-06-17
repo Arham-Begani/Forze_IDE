@@ -18,6 +18,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AnthropicProvider, GeminiProvider } from '@forze/agents';
 import { pickFolder } from '../lib/dialog';
+import { pendoTrack } from '../lib/pendoTrack';
 import { openWorkspace } from '../workbench/actions';
 import { useAgents } from '../workbench/agentStore';
 import { useProject } from '../workbench/projectStore';
@@ -204,7 +205,16 @@ export default function OnboardingWizard(): JSX.Element | null {
               <ArrowRight size={12} strokeWidth={1.8} style={{ marginLeft: 6 }} />
             </button>
           ) : (
-            <button type="button" className="btn-primary" onClick={markComplete}>
+            <button type="button" className="btn-primary" onClick={() => {
+              const apiKeys = useAgents.getState().apiKeys;
+              pendoTrack('onboarding_completed', {
+                workspace_configured: !!useProject.getState().workspaceRoot,
+                agent_key_configured: !!(apiKeys[GeminiProvider.id] || apiKeys[AnthropicProvider.id]),
+                gemini_key_set: !!apiKeys[GeminiProvider.id],
+                anthropic_key_set: !!apiKeys[AnthropicProvider.id],
+              });
+              markComplete();
+            }}>
               Open IDE
               <ArrowRight size={12} strokeWidth={1.8} style={{ marginLeft: 6 }} />
             </button>

@@ -25,6 +25,7 @@ import {
   type GitStatusReport,
 } from '../lib/git';
 import { scanDiff, partitionFindings } from '../lib/diffScan';
+import { pendoTrack } from '../lib/pendoTrack';
 import type { SecretFinding } from '../lib/secretRules';
 import { toast } from '../shell/toast';
 import { useCommitGuard, type ReviewResult } from './commitGuardStore';
@@ -68,7 +69,15 @@ function review(diff: string): ReviewResult {
  *  Used by the "Review staged" buttons in the SCM and Security panels. */
 export async function reviewStaged(cwd: string): Promise<SecretFinding[]> {
   const diff = await diffStaged(cwd);
-  return review(diff).findings;
+  const result = review(diff);
+  const { blockers, warnings } = partitionFindings(result.findings);
+  pendoTrack('security_review_completed', {
+    findings_count: result.findings.length,
+    blocker_count: blockers.length,
+    warning_count: warnings.length,
+    is_clean: result.findings.length === 0,
+  });
+  return result.findings;
 }
 
 export interface GuardOutcome {
@@ -95,7 +104,13 @@ export async function guardedCommit(
   const diff = prefetchedDiff ?? (await diffStaged(cwd));
   const result = review(diff);
   if (result.blocked) {
-    const { blockers } = partitionFindings(result.findings);
+    const { blockers, warnings } = partitionFindings(result.findings);
+    pendoTrack('commit_blocked_by_security', {
+      blocker_count: blockers.length,
+      warning_count: warnings.length,
+      secret_rules_triggered: blockers.map((f) => f.rule).join(', '),
+      is_auto_commit: false,
+    });
     return {
       committed: false,
       blocked: true,
@@ -150,7 +165,19 @@ export async function autoCommit(): Promise<void> {
     // we're about to reject. The secret gate is always on.
     const result = review(diff);
     if (result.blocked) {
-      const { blockers } = partitionFindings(result.findings);
+      const { blockers, warnings } = partitionFindings(result.findings);
+      pendoTrack('commit_blocked_by_security', {
+        blocker_count: blockers.length,
+        warning_count: warnings.length,
+        secret_rules_triggered: blockers.map((f) => f.rule).join(', '),
+        is_auto_commit: true,
+      });
+      pendoTrack('auto_commit_triggered', {
+        threshold: guard.threshold,
+        pending_changes: guard.pending,
+        blocked: true,
+        security_findings_count: result.findings.length,
+      });
       // Notify once on the leading edge — keep `pending` so the next save
       // retries automatically the moment the secret is removed, but don't
       // re-toast / re-navigate on every save while it's still there.
@@ -169,8 +196,21 @@ export async function autoCommit(): Promise<void> {
     const message = await buildMessage(diff, report);
     const hash = await gitCommit(workspaceRoot, message);
     guard.resetPending();
+    pendoTrack('auto_commit_triggered', {
+      threshold: guard.threshold,
+      pending_changes: guard.threshold,
+      blocked: false,
+      commit_hash: shortHash(hash),
+      message_source: aiReady() ? 'ai' : 'deterministic',
+      security_findings_count: result.findings.length,
+    });
     toast(`Auto-committed · ${shortHash(hash)} · ${message}`, 'success');
   } catch (err) {
+    pendoTrack('auto_commit_triggered', {
+      threshold: guard.threshold,
+      pending_changes: guard.pending,
+      blocked: false,
+    });
     toast(`Auto-commit failed: ${errMessage(err)}`, 'error');
   } finally {
     guard.setBusy(false);

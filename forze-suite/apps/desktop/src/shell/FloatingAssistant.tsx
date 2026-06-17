@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useWorkbench } from '../workbench/store';
 import { useAssistant } from '../workbench/assistantStore';
 import { activeProvider } from '../lib/ai';
+import { pendoTrack } from '../lib/pendoTrack';
 import { QUICK_DESTINATIONS, findDestination } from '../lib/assistantNav';
 
 /**
@@ -44,6 +45,11 @@ export default function FloatingAssistant(): JSX.Element {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
+    pendoTrack('assistant_message_sent', {
+      message_length: text.length,
+      conversation_length: messages.length,
+      has_ai_provider: !!provider,
+    });
     void send(text);
   };
 

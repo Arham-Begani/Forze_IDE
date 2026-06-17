@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { ArrowRight, Loader2, Lock, Mail } from 'lucide-react';
 import { supabase, supabaseConfigured } from '../lib/supabase';
+import { pendoTrack } from '../lib/pendoTrack';
 import LockWindowControls from './LockWindowControls';
 
 type Mode = 'signin' | 'signup';
@@ -41,6 +42,10 @@ export default function SignIn(): JSX.Element {
           password,
         });
         if (err) throw err;
+        pendoTrack('user_signed_in', {
+          auth_method: 'email',
+          email_domain: email.trim().split('@')[1] ?? '',
+        });
         // AuthGate's onAuthStateChange unlocks the app.
       } else {
         const { data, error: err } = await supabase.auth.signUp({
@@ -48,6 +53,10 @@ export default function SignIn(): JSX.Element {
           password,
         });
         if (err) throw err;
+        pendoTrack('user_signed_up', {
+          auth_method: 'email',
+          email_domain: email.trim().split('@')[1] ?? '',
+        });
         // When email confirmation is on, no session is returned yet.
         if (!data.session) {
           setNotice('Check your inbox to confirm your email, then sign in.');
@@ -86,6 +95,9 @@ export default function SignIn(): JSX.Element {
       const code = readRedirect(redirectUrl);
       const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
       if (exErr) throw exErr;
+      pendoTrack('google_oauth_completed', {
+        auth_method: 'google',
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { scanText, type SecretFinding } from '../lib/secretRules';
 import { partitionFindings } from '../lib/diffScan';
 import { basename } from '../lib/fs';
+import { pendoTrack } from '../lib/pendoTrack';
 import { reviewStaged } from '../workbench/commitGuard';
 import { useCommitGuard } from '../workbench/commitGuardStore';
 import { useProject } from '../workbench/projectStore';
@@ -34,7 +35,13 @@ export default function SecurityAuditor(): JSX.Element {
   const [dragOver, setDragOver] = useState(false);
 
   const runSecretScan = useCallback(() => {
-    setSecretFindings(scanText(bufferContents, bufferPath || null));
+    const findings = scanText(bufferContents, bufferPath || null);
+    setSecretFindings(findings);
+    pendoTrack('secret_scan_completed', {
+      findings_count: findings.length,
+      source: 'manual',
+      file_type: bufferPath?.split('.').pop() ?? '',
+    });
   }, [bufferContents, bufferPath]);
 
   /** Pull the active editor tab's path + last-saved contents and scan them. */
@@ -94,6 +101,12 @@ export default function SecurityAuditor(): JSX.Element {
       }
     }
     setRlsFindings(findings);
+    pendoTrack('rls_scan_completed', {
+      tables_scanned: tableMatches.length,
+      findings_count: findings.length,
+      missing_enable_rls_count: findings.filter((f) => f.reason === 'missing-enable-rls').length,
+      missing_policy_count: findings.filter((f) => f.reason === 'missing-policy').length,
+    });
   }, [migrationSql]);
 
   return (

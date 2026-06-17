@@ -5,6 +5,8 @@
 // the native shell, so outside it this is a no-op. The plugins are imported
 // dynamically so the web bundle never tries to resolve native-only code paths.
 
+import { pendoTrack } from './pendoTrack';
+
 const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -23,6 +25,10 @@ export async function checkForUpdates(): Promise<void> {
         `[forze] update available: ${update.version} (current ${update.currentVersion})`,
       );
       await update.downloadAndInstall();
+      pendoTrack('app_update_installed', {
+        new_version: update.version,
+        current_version: update.currentVersion,
+      });
       const { relaunch } = await import('@tauri-apps/plugin-process');
       await relaunch();
     }

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { AnthropicProvider, GeminiProvider } from '@forze/agents';
 import { pickFolder } from '../lib/dialog';
+import { pendoTrack } from '../lib/pendoTrack';
 import { THEMES, useTheme, type ThemeId } from '../theme/themeStore';
 import { useAgents } from '../workbench/agentStore';
 import { useAuth } from '../workbench/authStore';
@@ -171,7 +172,16 @@ export default function SettingsView(): JSX.Element {
           placeholder={geminiBuiltIn ? 'using built-in key — paste to override' : 'AIza…'}
           note={geminiBuiltIn ? 'Built-in · active' : undefined}
           value={apiKeys[GeminiProvider.id] ?? ''}
-          onChange={(v) => setApiKey(GeminiProvider.id, v)}
+          onChange={(v) => {
+            const prev = apiKeys[GeminiProvider.id] ?? '';
+            setApiKey(GeminiProvider.id, v);
+            if ((!prev && v) || (prev && !v)) {
+              pendoTrack('ai_provider_key_configured', {
+                provider_id: GeminiProvider.id,
+                is_removal: !v,
+              });
+            }
+          }}
         />
         <KeyField
           label="Anthropic (Claude)"
@@ -179,7 +189,16 @@ export default function SettingsView(): JSX.Element {
           placeholder="sk-ant-…"
           note="Optional · bring your own key"
           value={apiKeys[AnthropicProvider.id] ?? ''}
-          onChange={(v) => setApiKey(AnthropicProvider.id, v)}
+          onChange={(v) => {
+            const prev = apiKeys[AnthropicProvider.id] ?? '';
+            setApiKey(AnthropicProvider.id, v);
+            if ((!prev && v) || (prev && !v)) {
+              pendoTrack('ai_provider_key_configured', {
+                provider_id: AnthropicProvider.id,
+                is_removal: !v,
+              });
+            }
+          }}
         />
       </div>
 
@@ -296,6 +315,10 @@ function VercelCard(): JSX.Element {
     try {
       const u = await verifyToken(token);
       setUser(u.username);
+      pendoTrack('vercel_integration_connected', {
+        vercel_username: u.username,
+        has_team_id: !!teamId,
+      });
       toast(`Connected to Vercel as ${u.username}`, 'success');
     } catch (err) {
       setUser(null);

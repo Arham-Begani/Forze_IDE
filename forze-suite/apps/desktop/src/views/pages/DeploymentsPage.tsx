@@ -24,6 +24,7 @@ import {
   type Deployment,
 } from '../../workbench/appData';
 import { toast } from '../../shell/toast';
+import { pendoTrack } from '../../lib/pendoTrack';
 import { useIntegrations } from '../../workbench/integrationsStore';
 import { useProject } from '../../workbench/projectStore';
 import { useWorkbench } from '../../workbench/store';
@@ -177,7 +178,14 @@ export default function DeploymentsPage(): JSX.Element {
   const cancel = (d: VercelDeployment) =>
     runRowAction(
       d.uid,
-      () => cancelDeployment(token, d.uid, teamId || undefined),
+      async () => {
+        await cancelDeployment(token, d.uid, teamId || undefined);
+        pendoTrack('deployment_canceled', {
+          deployment_uid: d.uid,
+          deployment_name: d.name,
+          team_scope: !!teamId,
+        });
+      },
       `Canceled ${d.name}`,
     );
 
@@ -188,7 +196,15 @@ export default function DeploymentsPage(): JSX.Element {
     }
     void runRowAction(
       d.uid,
-      () => promoteDeployment(token, projectId, d.uid, teamId || undefined),
+      async () => {
+        await promoteDeployment(token, projectId, d.uid, teamId || undefined);
+        pendoTrack('deployment_promoted', {
+          project_id: projectId,
+          deployment_uid: d.uid,
+          deployment_url: d.url,
+          team_scope: !!teamId,
+        });
+      },
       `Promoted ${d.url} to production`,
     );
   };
@@ -210,6 +226,12 @@ export default function DeploymentsPage(): JSX.Element {
         ref,
         target: 'production',
         teamId: teamId || undefined,
+      });
+      pendoTrack('deployment_triggered', {
+        project_name: selectedProject.name,
+        branch: ref,
+        target: 'production',
+        team_scope: !!teamId,
       });
       toast(`Deploying ${selectedProject.name} @ ${ref} → ${url}`, 'success');
       setTimeout(() => void refresh(), 1500);

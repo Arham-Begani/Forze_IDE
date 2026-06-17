@@ -20,6 +20,7 @@ import {
 } from '../lib/git';
 import { partitionFindings } from '../lib/diffScan';
 import { basename, dirname, joinPath } from '../lib/fs';
+import { pendoTrack } from '../lib/pendoTrack';
 import { openFile } from '../workbench/actions';
 import { guardedCommit, reviewStaged } from '../workbench/commitGuard';
 import { useCommitGuard, type ReviewResult } from '../workbench/commitGuardStore';
@@ -100,6 +101,13 @@ export default function SourceControlView(): JSX.Element {
         setActionError(null);
         toast(`Committed ${outcome.hash?.slice(0, 7) ?? ''}`.trim(), 'success');
       }
+      pendoTrack('git_commit_created', {
+        blocked: outcome.blocked,
+        staged_files_count: staged.length,
+        branch: report?.branch ?? '',
+        commit_hash: outcome.hash?.slice(0, 7) ?? '',
+        has_security_findings: outcome.findings.length > 0,
+      });
       await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));

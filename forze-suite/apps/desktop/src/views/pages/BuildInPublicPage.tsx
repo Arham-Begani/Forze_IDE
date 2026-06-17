@@ -22,6 +22,7 @@ import {
   postToLinkedin,
 } from '../../lib/publish';
 import { toast } from '../../shell/toast';
+import { pendoTrack } from '../../lib/pendoTrack';
 import { generateText } from '../../lib/ai';
 import { useBipSchedule } from '../../workbench/bipScheduleStore';
 import BipScheduleBoard from './BipScheduleBoard';
@@ -64,6 +65,11 @@ export default function BuildInPublicPage(): JSX.Element {
     }
     scheduleBipPost(text, when);
     setScheduleAt('');
+    pendoTrack('social_post_scheduled', {
+      platform: 'linkedin',
+      post_length: text.length,
+      scheduled_for_delta_minutes: Math.round((when - Date.now()) / 60000),
+    });
     toast('Scheduled — it posts automatically while the IDE is open', 'success');
   };
 
@@ -85,6 +91,9 @@ export default function BuildInPublicPage(): JSX.Element {
     setConnecting(true);
     try {
       await connectLinkedin();
+      pendoTrack('linkedin_connected', {
+        has_refresh_token: !!useIntegrations.getState().linkedinToken,
+      });
       toast('LinkedIn connected', 'success');
     } catch (err) {
       toast(err instanceof Error ? err.message : 'LinkedIn login failed', 'error');
@@ -104,6 +113,11 @@ export default function BuildInPublicPage(): JSX.Element {
     setPublishing(true);
     try {
       const { url } = await postToLinkedin(text);
+      pendoTrack('social_post_published', {
+        platform: 'linkedin',
+        post_length: text.length,
+        post_url: url ?? '',
+      });
       toast('Posted to LinkedIn 🎉', 'success');
       if (url) {
         try {
@@ -186,6 +200,11 @@ export default function BuildInPublicPage(): JSX.Element {
         },
       );
       setBipPost(text);
+      pendoTrack('social_post_generated', {
+        commits_selected: pool.length,
+        platform: 'linkedin',
+        post_length: text.length,
+      });
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Generation failed', 'error');
     } finally {
