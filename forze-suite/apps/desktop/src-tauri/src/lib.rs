@@ -45,20 +45,108 @@ fn delete_credential(service: &str, username: &str) -> Result<(), String> {
 /// async storage `getItem` expects.
 const KEYCHAIN_SERVICE: &str = "forze-ide";
 
+/// Windows Credential Manager caps a single credential blob at
+/// `CRED_MAX_CREDENTIAL_BLOB_SIZE` (2560 bytes), and `keyring` surfaces that as
+/// an error on `set_password`. A Supabase session — access JWT + refresh token +
+/// the full user object as JSON — is reliably larger than that, so storing it in
+/// one entry silently failed and the user was kicked back to the sign-in screen
+/// on every launch. We instead split long values into entries that each stay
+/// under the cap and reassemble them on read, so a session survives a restart on
+/// every platform. The budget counts whichever of UTF-8 / UTF-16 is larger per
+/// char, since the backend's encoding differs by OS — 2400 leaves margin under
+/// the 2560 cap.
+const CHUNK_BUDGET_BYTES: usize = 2400;
+/// Manifest prefix written to the bare `key`; the value is the chunk count.
+const CHUNK_HEADER: &str = "forze-chunks:";
+
+/// Per-chunk entry name for chunk `i` of `key`. supabase-js storage keys never
+/// contain `#`, so this can't collide with a real key.
+fn chunk_key(key: &str, i: usize) -> String {
+    format!("{key}#{i}")
+}
+
+/// The chunk count recorded in `key`'s manifest entry, if the value is chunked.
+fn chunk_count(key: &str) -> Option<usize> {
+    let header = Entry::new(KEYCHAIN_SERVICE, key).ok()?.get_password().ok()?;
+    header.strip_prefix(CHUNK_HEADER)?.parse().ok()
+}
+
+/// Split a value into pieces that each fit under `CHUNK_BUDGET_BYTES`, never
+/// splitting a `char`. Always yields at least one (possibly empty) piece.
+fn split_chunks(value: &str) -> Vec<String> {
+    let mut chunks: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut used = 0usize;
+    for ch in value.chars() {
+        let cost = std::cmp::max(ch.len_utf8(), ch.len_utf16() * 2);
+        if used + cost > CHUNK_BUDGET_BYTES && !current.is_empty() {
+            chunks.push(std::mem::take(&mut current));
+            used = 0;
+        }
+        current.push(ch);
+        used += cost;
+    }
+    if !current.is_empty() || chunks.is_empty() {
+        chunks.push(current);
+    }
+    chunks
+}
+
 #[command]
 fn secure_get(key: String) -> Option<String> {
-    Entry::new(KEYCHAIN_SERVICE, &key).ok()?.get_password().ok()
+    let header = Entry::new(KEYCHAIN_SERVICE, &key).ok()?.get_password().ok()?;
+    // A value written before chunking (or any non-chunked write) is returned as
+    // stored; otherwise reassemble the manifest's chunks in order.
+    let Some(count) = header.strip_prefix(CHUNK_HEADER) else {
+        return Some(header);
+    };
+    let count: usize = count.parse().ok()?;
+    let mut out = String::new();
+    for i in 0..count {
+        // A missing chunk means a torn write — report the whole value as absent
+        // so supabase-js treats it as "no session" and re-authenticates.
+        let chunk = Entry::new(KEYCHAIN_SERVICE, &chunk_key(&key, i))
+            .ok()?
+            .get_password()
+            .ok()?;
+        out.push_str(&chunk);
+    }
+    Some(out)
 }
 
 #[command]
 fn secure_set(key: String, value: String) {
+    let chunks = split_chunks(&value);
+    // Drop any trailing chunks left by a previous, longer value so a shrunken
+    // value can never reassemble with stale tail data.
+    if let Some(prev) = chunk_count(&key) {
+        for i in chunks.len()..prev {
+            if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &chunk_key(&key, i)) {
+                let _ = entry.delete_password();
+            }
+        }
+    }
+    for (i, chunk) in chunks.iter().enumerate() {
+        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &chunk_key(&key, i)) {
+            let _ = entry.set_password(chunk);
+        }
+    }
+    // Write the manifest last: it's the commit point a read keys off, so a
+    // partial write never resolves to a corrupt value.
     if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &key) {
-        let _ = entry.set_password(&value);
+        let _ = entry.set_password(&format!("{CHUNK_HEADER}{}", chunks.len()));
     }
 }
 
 #[command]
 fn secure_remove(key: String) {
+    if let Some(count) = chunk_count(&key) {
+        for i in 0..count {
+            if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &chunk_key(&key, i)) {
+                let _ = entry.delete_password();
+            }
+        }
+    }
     if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &key) {
         let _ = entry.delete_password();
     }
