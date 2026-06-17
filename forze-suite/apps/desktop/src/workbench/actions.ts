@@ -12,10 +12,12 @@ import {
 } from '../lib/fs';
 import {
   currentBranch as gitCurrentBranch,
+  remoteOriginUrl,
   repoRoot as gitRepoRoot,
   status as gitStatus,
 } from '../lib/git';
 import { confirmDialog } from '../lib/dialog';
+import { syncProject } from '../lib/sync';
 import { noteChange } from './commitGuard';
 import { useProject } from './projectStore';
 import { useVibeStations } from './vibeStationsStore';
@@ -60,6 +62,24 @@ export async function openWorkspace(root: string): Promise<void> {
   } catch {
     project.setIsGitRepo(false);
     project.setBranch(null);
+  }
+
+  // Mirror this project's METADATA to the cloud (never file contents). No-op
+  // when there's no Forze account signed in or Supabase isn't configured.
+  void mirrorProjectToCloud(root);
+}
+
+/** Upsert the opened folder's metadata to `ide_projects` (path + git remote). */
+async function mirrorProjectToCloud(root: string): Promise<void> {
+  try {
+    const gitRemote = await remoteOriginUrl(root);
+    await syncProject({
+      name: basename(root),
+      localPath: root,
+      gitRemote,
+    });
+  } catch (err) {
+    console.warn('[forze] cloud project sync failed', err);
   }
 }
 
