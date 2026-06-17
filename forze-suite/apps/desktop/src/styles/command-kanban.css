@@ -544,6 +544,21 @@
   color: var(--color-text);
   background: var(--lane-soft);
 }
+
+/* Keyboard focus rings for the board controls. The card uses an INSET ring so
+   it isn't clipped by the lane's own overflow; the rest use the standard
+   accent outline so tabbing the board reads as deliberate. */
+.kb-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-focus-ring) inset;
+}
+.kb-prio:focus-visible,
+.kb-assignee:focus-visible,
+.kb-add-btn:focus-visible,
+.kb-lane__label:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
 .kb-add input {
   width: 100%;
   padding: 8px 10px;
