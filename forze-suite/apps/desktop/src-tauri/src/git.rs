@@ -26,9 +26,13 @@ pub struct GitStatusReport {
 }
 
 fn run_git(cwd: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(cwd)
-        .args(args)
+    let mut cmd = Command::new("git");
+    cmd.current_dir(cwd).args(args);
+    // Suppress the console window Windows would otherwise pop for every git
+    // invocation — git_status polls every 4s, so without this the IDE strobes
+    // conhost windows and bogs down on a large repo. No-op off Windows.
+    crate::no_window(&mut cmd);
+    let output = cmd
         .output()
         .map_err(|e| format!("failed to spawn git: {e}"))?;
     if !output.status.success() {
