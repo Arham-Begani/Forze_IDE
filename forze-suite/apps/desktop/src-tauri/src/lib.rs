@@ -1,6 +1,7 @@
 mod fs;
 mod git;
 mod linkedin;
+mod oauth;
 mod pty;
 
 use keyring::Entry;
@@ -37,6 +38,32 @@ fn delete_credential(service: &str, username: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Single-key keychain accessors used as supabase-js's session storage adapter
+/// (see lib/supabase.ts). All entries live under one service so the auth token
+/// never touches localStorage. `secure_get` returns `None` (→ `null` in JS) for
+/// a missing key rather than erroring, which is the contract supabase-js's
+/// async storage `getItem` expects.
+const KEYCHAIN_SERVICE: &str = "forze-ide";
+
+#[command]
+fn secure_get(key: String) -> Option<String> {
+    Entry::new(KEYCHAIN_SERVICE, &key).ok()?.get_password().ok()
+}
+
+#[command]
+fn secure_set(key: String, value: String) {
+    if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &key) {
+        let _ = entry.set_password(&value);
+    }
+}
+
+#[command]
+fn secure_remove(key: String) {
+    if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &key) {
+        let _ = entry.delete_password();
+    }
+}
+
 /// Capture `git diff HEAD` for the active workspace root.
 #[command]
 fn get_git_diff(cwd: Option<String>) -> Result<String, String> {
@@ -45,6 +72,7 @@ fn get_git_diff(cwd: Option<String>) -> Result<String, String> {
     if let Some(path) = cwd {
         cmd.current_dir(path);
     }
+    no_window(&mut cmd);
 
     let output = cmd.output().map_err(|e| e.to_string())?;
     if !output.status.success() {
@@ -67,12 +95,13 @@ fn run_dev_server(app: AppHandle, project_path: String) -> Result<(), String> {
     let stderr_app = app.clone();
 
     thread::spawn(move || {
-        let spawn_result = Command::new(npm_executable())
-            .current_dir(&project_path)
+        let mut npm = Command::new(npm_executable());
+        npm.current_dir(&project_path)
             .args(["run", "dev"])
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn();
+            .stderr(Stdio::piped());
+        no_window(&mut npm);
+        let spawn_result = npm.spawn();
 
         let mut child = match spawn_result {
             Ok(child) => child,
@@ -128,6 +157,24 @@ struct CommandOutput {
     exit_code: i32,
     timed_out: bool,
 }
+
+/// On Windows, stop a console child process (git, npm, …) spawned from this GUI
+/// app from flashing a console window over the IDE. A GUI process has no console
+/// of its own, so Windows allocates a fresh conhost window for every console
+/// child unless we pass CREATE_NO_WINDOW. Without this, the 4-second `git status`
+/// poll (plus the change gutter, commit guard, and SCM panel) makes console
+/// windows strobe over the editor — looking like "lots of terminals keep
+/// opening" — and piles up enough conhost churn on a large repo to lag and
+/// eventually crash the app. No-op off Windows.
+#[cfg(windows)]
+pub(crate) fn no_window(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+pub(crate) fn no_window(_cmd: &mut Command) {}
 
 /// Build a shell that runs `command` as a single line, the way a human would
 /// type it in a terminal. We go through the platform shell so agents can use
@@ -352,6 +399,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -367,6 +415,11 @@ pub fn run() {
             store_credential,
             get_credential,
             delete_credential,
+            secure_get,
+            secure_set,
+            secure_remove,
+            // forze account oauth (google, loopback)
+            oauth::google_oauth_login,
             // dev server / diff (legacy)
             get_git_diff,
             run_dev_server,
