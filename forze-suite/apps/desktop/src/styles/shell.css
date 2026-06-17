@@ -119,7 +119,7 @@
 }
 .titlebar__menu-btn:hover,
 .titlebar__menu-btn.is-open {
-  background: rgba(var(--color-overlay-rgb), 0.06);
+  background: var(--hover-soft);
   color: var(--color-text);
 }
 .titlebar__dropdown {
@@ -187,7 +187,7 @@
   cursor: pointer;
 }
 .titlebar__nav:hover:not(:disabled) {
-  background: rgba(var(--color-overlay-rgb), 0.06);
+  background: var(--hover-soft);
   color: var(--color-text);
 }
 .titlebar__nav:disabled {
@@ -210,7 +210,7 @@
   cursor: pointer;
 }
 .titlebar__command-center:hover {
-  background: rgba(var(--color-overlay-rgb), 0.05);
+  background: var(--hover-soft);
   color: var(--color-text);
 }
 .titlebar__command-center span {
@@ -235,7 +235,7 @@
   cursor: pointer;
 }
 .titlebar__win-btn:hover {
-  background: rgba(var(--color-overlay-rgb), 0.08);
+  background: var(--hover-soft);
   color: var(--color-text);
 }
 .titlebar__win-btn--close:hover {
