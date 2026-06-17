@@ -15,7 +15,9 @@
   flex-shrink: 0;
   padding: 14px 0;
   text-align: right;
-  color: var(--color-text-disabled);
+  /* Recessive but legible — the old --color-text-disabled (#474747) sat at
+     ~2.3:1 on the black canvas, below the WCAG floor. text-dim reads cleanly. */
+  color: var(--color-text-dim);
   background: var(--color-editor-gutter);
   user-select: none;
   overflow: hidden;
@@ -136,6 +138,43 @@
   outline: none;
   box-shadow: none;
   border: 0;
+}
+
+/* Active-line highlight band — a transform-positioned tint that tracks the
+   caret line (moved imperatively from EditorCanvas, so it's GPU-cheap and never
+   triggers a React re-render). Sits above the highlighted <pre> and below the
+   transparent textarea, so the caret and selection stay on top. */
+.codeedit__activeline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14px; /* matches .codeedit__pre / .codeedit__ta padding-top */
+  height: 20px; /* matches the 20px line-height */
+  background: var(--color-editor-line);
+  pointer-events: none;
+  z-index: 1;
+  will-change: transform;
+}
+
+.codeedit__ta {
+  z-index: 2;
+  /* Reserve the scrollbar track so toggling the vertical bar never reflows the
+     code, and slim the bars down for the dense code surface. */
+  scrollbar-gutter: stable;
+}
+.codeedit__ta::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.codeedit__ta::-webkit-scrollbar-thumb {
+  background: rgba(var(--color-overlay-rgb), 0.07);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--radius-pill);
+}
+.codeedit__ta::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--color-overlay-rgb), 0.18);
+  background-clip: padding-box;
 }
 
 /* === Syntax highlighting (highlight.js token theme) ======================
@@ -488,5 +527,113 @@
 @keyframes numFlash {
   from { background: rgba(229, 100, 95, 0.18); }
   to { background: transparent; }
+}
+
+/* === Terminal sub-tabs (per-PTY strip inside the Terminal panel) ========= */
+.term-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: rgba(var(--color-overlay-rgb), 0.012);
+  flex-shrink: 0;
+}
+
+.term-strip__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 24px;
+  padding: 0 6px 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-dim);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+
+.term-strip__tab:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+}
+
+.term-strip__tab.is-active {
+  background: var(--color-surface-active);
+  border-color: rgba(var(--color-accent-rgb), 0.22);
+  color: var(--color-text);
+  box-shadow: inset 0 1px 0 rgba(var(--color-overlay-rgb), 0.05);
+}
+
+.term-strip__tab:active {
+  transform: scale(0.97);
+}
+
+/* A small status dot per terminal — lights to the accent when it's the live one. */
+.term-strip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-disabled);
+  flex-shrink: 0;
+  transition: all var(--motion-fast);
+}
+
+.term-strip__tab.is-active .term-strip__dot {
+  background: var(--color-accent);
+  box-shadow: 0 0 7px var(--color-accent);
+}
+
+.term-strip__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-right: -2px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-dim);
+  opacity: 0;
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+
+.term-strip__tab:hover .term-strip__close,
+.term-strip__tab.is-active .term-strip__close {
+  opacity: 0.65;
+}
+
+.term-strip__close:hover {
+  opacity: 1;
+  background: rgba(var(--color-overlay-rgb), 0.1);
+  color: var(--color-danger);
+  transform: rotate(90deg);
+}
+
+.term-strip__new {
+  margin-left: auto;
+}
+
+/* xterm ships its own .xterm-viewport scrollbar; pull it in line with the
+   app's hairline scrollbar so the terminal never shows a default browser bar. */
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 11px;
+}
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(var(--color-overlay-rgb), 0.09);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--radius-pill);
+}
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--color-overlay-rgb), 0.2);
+  background-clip: padding-box;
 }
 
