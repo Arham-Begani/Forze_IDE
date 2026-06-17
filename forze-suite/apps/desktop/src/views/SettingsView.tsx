@@ -7,20 +7,26 @@ import {
   CheckCircle2,
   ExternalLink,
   Loader2,
+  LogOut,
   Rocket,
   GitCommitHorizontal,
   ShieldCheck,
+  UserCircle2,
   Zap,
 } from 'lucide-react';
 import { AnthropicProvider, GeminiProvider } from '@forze/agents';
 import { pickFolder } from '../lib/dialog';
 import { THEMES, useTheme, type ThemeId } from '../theme/themeStore';
 import { useAgents } from '../workbench/agentStore';
+import { useAuth } from '../workbench/authStore';
+import { useCloud } from '../workbench/cloudStore';
+import { useAssistant } from '../workbench/assistantStore';
 import { usesBuiltInKey } from '../workbench/aiConfig';
 import { openWorkspace } from '../workbench/actions';
 import { useProject } from '../workbench/projectStore';
 import { useCommitGuard } from '../workbench/commitGuardStore';
 import { useIntegrations } from '../workbench/integrationsStore';
+import { supabase } from '../lib/supabase';
 import { verifyToken } from '../lib/vercel';
 import ToggleSwitch from '../shell/ToggleSwitch';
 import { toast } from '../shell/toast';
@@ -32,12 +38,73 @@ export default function SettingsView(): JSX.Element {
   const setApiKey = useAgents((s) => s.setApiKey);
   const geminiBuiltIn = usesBuiltInKey(GeminiProvider.id, apiKeys);
   const workspaceRoot = useProject((s) => s.workspaceRoot);
+  const email = useAuth((s) => s.email);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const signOut = async (): Promise<void> => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await supabase.auth.signOut();
+      // Drop the cloud mirror + chat so the next account starts clean. AuthGate's
+      // onAuthStateChange returns the app to the locked sign-in screen.
+      useCloud.getState().reset();
+      useAssistant.getState().reset();
+    } catch (err) {
+      toast(
+        `Sign out failed: ${err instanceof Error ? err.message : String(err)}`,
+        'warn',
+      );
+      setSigningOut(false);
+    }
+  };
 
   return (
     <section className="panel">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Settings size={18} strokeWidth={1.6} />
         <h2 style={{ margin: 0 }}>Settings</h2>
+      </div>
+
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <UserCircle2 size={13} strokeWidth={1.8} />
+          <strong style={{ fontSize: 13 }}>Forze account</strong>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <p className="dim" style={{ margin: 0 }}>
+            {email ? (
+              <>
+                Signed in as <strong>{email}</strong>
+              </>
+            ) : (
+              'Signed in.'
+            )}
+            <br />
+            Projects &amp; chats sync to the cloud — your code stays on this
+            machine.
+          </p>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            disabled={signingOut}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            {signingOut ? (
+              <Loader2 size={13} strokeWidth={2} className="spin" />
+            ) : (
+              <LogOut size={13} strokeWidth={1.8} />
+            )}
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
