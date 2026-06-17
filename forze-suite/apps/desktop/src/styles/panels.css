@@ -33,7 +33,7 @@
 }
 .card:hover {
   border-color: rgba(var(--color-accent-rgb), 0.25);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+  box-shadow: var(--shadow-card), 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
   transform: translateY(-2px);
 }
 
@@ -294,6 +294,20 @@
   gap: 10px;
 }
 
+.launch__recents {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.launch__recents-label {
+  font-size: var(--font-size-xs);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--color-sidebar-section-fg);
+}
+
 .launch__chip {
   padding: 8px 16px;
   border-radius: var(--radius-pill);
@@ -350,7 +364,7 @@
 .feature-card:hover {
   border-color: rgba(var(--color-accent-rgb), 0.25);
   transform: translateY(-4px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+  box-shadow: var(--shadow-card), 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
 }
 
 .feature-card__icon {
