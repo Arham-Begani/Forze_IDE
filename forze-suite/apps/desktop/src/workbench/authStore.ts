@@ -21,12 +21,21 @@ export const useAuth = create<AuthState>((set) => ({
   status: 'loading',
   userId: null,
   email: null,
-  setSession: (session) =>
+  setSession: (session) => {
     set({
       status: session ? 'authed' : 'anon',
       userId: session?.user?.id ?? null,
       email: session?.user?.email ?? null,
-    }),
+    });
+    if (session?.user) {
+      pendo.identify({
+        visitor: {
+          id: session.user.id,
+          email: session.user.email ?? undefined,
+        },
+      });
+    }
+  },
 }));
 
 /** Read the current user id outside React (for sync helpers). */
