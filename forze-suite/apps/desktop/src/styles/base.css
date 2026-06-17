@@ -201,7 +201,7 @@ button.btn-primary::after,
   background: linear-gradient(
     105deg,
     transparent,
-    rgba(255, 255, 255, 0.35),
+    rgba(var(--color-overlay-rgb), 0.28),
     transparent
   );
   transform: skewX(-20deg);
@@ -219,5 +219,39 @@ button.btn-primary:hover:not(:disabled)::after,
 @keyframes btnSheen {
   from { left: -60%; }
   to { left: 120%; }
+}
+
+/* === Unified focus ring ===================================================
+   One accent focus-visible treatment for every keyboard-reachable control, so
+   tabbing through the IDE always reads as deliberate (not the browser default
+   on the role="button"/role="tab" divs the shell uses). Mouse clicks keep their
+   quiet look — :focus-visible only fires for keyboard/AT navigation. */
+a:focus-visible,
+[role='button']:focus-visible,
+[role='tab']:focus-visible,
+[role='option']:focus-visible,
+[tabindex]:not([tabindex='-1']):focus-visible,
+summary:focus-visible {
+  /* No border-radius here: the WebView follows each element's own radius for the
+     outline, so square controls stay square (forcing a radius would pop their
+     corners on focus). tabindex="-1" is programmatic-focus only — no keyboard ring. */
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* === Reduced-motion guard (global) ========================================
+   Respect the OS "reduce motion" setting everywhere at once: collapse every
+   transition/animation to an instant and pin scrolling, while keeping final
+   states intact. Premium software defers to this; Forze previously only honored
+   it in a couple of partials. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
