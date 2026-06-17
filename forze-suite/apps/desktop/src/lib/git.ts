@@ -85,6 +85,25 @@ export function fileHead(cwd: string, path: string): Promise<string> {
   return invokeCommand<string>('git_file_head', { cwd, path });
 }
 
+/**
+ * The repo's `origin` remote URL, or null when there isn't one (or the folder
+ * isn't a git repo). Used as a cross-device dedupe key when mirroring the
+ * project list to the cloud. Runs through the generic `run_command` since it's
+ * a one-shot read, not part of the hot status path.
+ */
+export async function remoteOriginUrl(cwd: string): Promise<string | null> {
+  try {
+    const out = await invokeCommand<{ stdout: string; exit_code: number }>(
+      'run_command',
+      { command: 'git config --get remote.origin.url', cwd, timeout_ms: 8000 },
+    );
+    const url = out.stdout.trim();
+    return url.length > 0 ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 export function describeStatus(entry: GitStatusEntry): string {
   if (entry.untracked) return 'Untracked';
   const labels: Record<string, string> = {
