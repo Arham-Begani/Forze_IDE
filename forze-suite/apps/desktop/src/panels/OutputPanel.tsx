@@ -1,3 +1,4 @@
+import { Terminal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 interface OutputPanelProps {
@@ -16,6 +17,7 @@ export default function OutputPanel({ logs }: OutputPanelProps): JSX.Element {
   if (logs.length === 0) {
     return (
       <div className="placeholder-view" style={{ height: '100%' }}>
+        <Terminal size={28} strokeWidth={1.4} aria-hidden />
         <h3>No output</h3>
         <p>
           Dev-server logs streamed from the Tauri sidecar will appear here.
