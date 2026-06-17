@@ -15,6 +15,7 @@ import { pickFolder } from '../lib/dialog';
 import { openWorkspace } from '../workbench/actions';
 import { askForze } from '../workbench/ask';
 import { useAgents } from '../workbench/agentStore';
+import { useCloud } from '../workbench/cloudStore';
 import { useProject } from '../workbench/projectStore';
 import { isDockable, useWorkbench, type ActivityId } from '../workbench/store';
 
@@ -84,6 +85,11 @@ export default function WelcomeScreen(): JSX.Element {
   const setBottomPanelTab = useWorkbench((s) => s.setBottomPanelTab);
   const setAssistantOpen = useWorkbench((s) => s.setAssistantOpen);
   const openPage = useWorkbench((s) => s.openPage);
+  // Projects mirrored to the Forze account — re-openable on any machine where
+  // the path still exists (only metadata syncs; files never leave the device).
+  const recentProjects = useCloud((s) =>
+    s.projects.filter((p) => !!p.local_path && p.local_path !== workspaceRoot).slice(0, 6),
+  );
 
   const submit = (): void => {
     const text = prompt.trim();
@@ -174,6 +180,27 @@ export default function WelcomeScreen(): JSX.Element {
           </button>
         </div>
       </div>
+
+      {recentProjects.length > 0 && (
+        <div className="launch__recents">
+          <span className="launch__recents-label">Recent projects</span>
+          <div className="launch__chips">
+            {recentProjects.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="launch__chip"
+                title={p.local_path ?? undefined}
+                onClick={() => {
+                  if (p.local_path) void openWorkspace(p.local_path);
+                }}
+              >
+                <span aria-hidden="true">{p.icon ?? '🚀'}</span> {p.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="launch__features">
         {FEATURES.map((feature) => {
