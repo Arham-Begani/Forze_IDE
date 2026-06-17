@@ -34,6 +34,11 @@
      `rgba(var(--color-overlay-rgb), …)` in the chrome reads through this. */
   --color-overlay-rgb: 255, 255, 255;
 
+  /* Neutral hover plate shared across the chrome (title bar, window controls,
+     menu items). Reads through --color-overlay-rgb, so it flips correctly on
+     the light theme with no per-theme override. */
+  --hover-soft: rgba(var(--color-overlay-rgb), 0.06);
+
   /* Form fields */
   --color-input-bg: rgba(13, 13, 18, 0.6);
   --color-input-bg-focus: rgba(13, 13, 18, 0.8);
