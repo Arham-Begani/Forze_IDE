@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import AuthGate from './AuthGate';
 import './index.css';
 import ErrorBoundary from './shell/ErrorBoundary';
 
@@ -21,7 +22,9 @@ window.addEventListener('unhandledrejection', (e) => {
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <ErrorBoundary scope="Forze IDE">
-      <App />
+      <AuthGate>
+        <App />
+      </AuthGate>
     </ErrorBoundary>
   </React.StrictMode>,
 );
