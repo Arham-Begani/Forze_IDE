@@ -1,7 +1,6 @@
 import '@xterm/xterm/css/xterm.css';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
 import { useEffect, useRef, useState } from 'react';
 import {
   killPty,
@@ -13,7 +12,7 @@ import {
 import { useTheme } from '../theme/themeStore';
 import { useVibeStations } from '../workbench/vibeStationsStore';
 import { buildLaunchKeystroke, prepareStationLaunch } from '../lib/agentBus';
-import { xtermThemeFor } from './XtermView';
+import { createForzeTerminal, xtermThemeFor } from './terminalKit';
 
 /** xterm always reports ≥1 after a successful fit; guard against a stray 0. */
 function dims(term: Terminal): { cols: number; rows: number } {
@@ -245,40 +244,7 @@ async function initialiseTerminal(
   ptyIdRef: React.MutableRefObject<string | null>,
   disposedRef: React.MutableRefObject<boolean>,
 ): Promise<void> {
-  const term = new Terminal({
-    fontFamily:
-      "'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, monospace",
-    fontSize: 12,
-    lineHeight: 1.35,
-    letterSpacing: 0,
-    cursorBlink: true,
-    cursorStyle: 'bar',
-    allowProposedApi: true,
-    // A grid of these at 8000-line scrollback each was a real memory sink on a
-    // RAM-constrained box; 1500 lines is still ample history per terminal.
-    scrollback: 1500,
-    theme: xtermThemeFor(),
-  });
-
-  const fit = new FitAddon();
-  term.loadAddon(fit);
-  term.loadAddon(new WebLinksAddon());
-
-  // Ctrl+L / Cmd+K: clear the screen, shell-agnostic.
-  term.attachCustomKeyEventHandler((e) => {
-    if (e.type !== 'keydown') return true;
-    const isClear =
-      (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'l' || e.key === 'L')) ||
-      (e.metaKey && (e.key === 'k' || e.key === 'K'));
-    if (isClear) {
-      term.clear();
-      return false;
-    }
-    return true;
-  });
-
-  term.open(container);
-  fit.fit();
+  const { term, fit } = createForzeTerminal(container, { fontSize: 12 });
   const { cols: safeCols, rows: safeRows } = dims(term);
 
   termRef.current = term;
