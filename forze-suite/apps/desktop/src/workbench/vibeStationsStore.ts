@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { CrewRole } from '../lib/agentBus';
 
 /**
  * State for "Vibe Stations" — a grid of AI coding-agent terminals. Each station
@@ -50,6 +51,9 @@ export const MIN_STATION_HEIGHT = 180;
 export const MAX_STATION_HEIGHT = 1000;
 export const MAX_COL_SPAN = 4;
 
+/** A station's job on the crew. `builder` is the default for ad-hoc stations. */
+export type StationRole = CrewRole;
+
 export interface Station {
   id: string;
   agentId: AgentId;
@@ -63,6 +67,10 @@ export interface Station {
   height: number;
   /** When true the station's title bar is removed (terminal goes full-bleed). */
   barHidden: boolean;
+  /** Crew role — drives which tasks it pulls and how it's briefed. */
+  role: StationRole;
+  /** For builders: the lane name it owns (e.g. "lane-1"); null otherwise. */
+  lane: string | null;
 }
 
 const clampSpan = (n: number): number =>
@@ -71,7 +79,12 @@ const clampHeight = (n: number): number =>
   Math.min(MAX_STATION_HEIGHT, Math.max(MIN_STATION_HEIGHT, Math.round(n) || DEFAULT_STATION_HEIGHT));
 
 /** New stations start one column wide at the default height with a visible bar. */
-function newStation(agentId: AgentId, cwd: string | null): Station {
+function newStation(
+  agentId: AgentId,
+  cwd: string | null,
+  role: StationRole = 'builder',
+  lane: string | null = null,
+): Station {
   return {
     id: crypto.randomUUID(),
     agentId,
@@ -80,10 +93,12 @@ function newStation(agentId: AgentId, cwd: string | null): Station {
     colSpan: 1,
     height: DEFAULT_STATION_HEIGHT,
     barHidden: false,
+    role,
+    lane,
   };
 }
 
-/** Backfill sizing fields onto a station loaded from an older persisted payload. */
+/** Backfill sizing + crew fields onto a station loaded from an older payload. */
 function normalizeStation(s: Partial<Station> & { id: string; agentId: AgentId }): Station {
   return {
     id: s.id,
@@ -93,7 +108,27 @@ function normalizeStation(s: Partial<Station> & { id: string; agentId: AgentId }
     colSpan: clampSpan(s.colSpan ?? 1),
     height: clampHeight(s.height ?? DEFAULT_STATION_HEIGHT),
     barHidden: s.barHidden ?? false,
+    role: s.role ?? 'builder',
+    lane: s.lane ?? null,
   };
+}
+
+/** A crew layout to launch: one architect, N lane-locked builders, optional
+ *  reviewer. Builder lanes are auto-named `lane-1`, `lane-2`, … in order. */
+export interface CrewSpec {
+  architect: AgentId;
+  /** One entry per builder, in lane order. */
+  builders: AgentId[];
+  reviewer: AgentId | null;
+}
+
+/** The roles assigned across the (existing or freshly-launched) crew. */
+export interface CrewAssignment {
+  architect: Station | null;
+  builders: Station[];
+  reviewer: Station | null;
+  /** Lane names the builders own, in order. */
+  lanes: string[];
 }
 
 /** A *logical* station address ("Claude Code #1") — an agent + a 1-based ordinal
@@ -127,6 +162,13 @@ interface VibeStationsState {
   addStation: (agentId: AgentId, cwd: string | null) => string;
   /** Replace the grid with a fresh session built from per-agent counts. */
   launchSession: (counts: Partial<Record<AgentId, number>>, cwd: string | null) => void;
+  /** Replace the grid with a fresh crew: architect + lane-locked builders +
+   *  optional reviewer. Returns the assignment (with auto-named lanes). */
+  launchCrew: (spec: CrewSpec, cwd: string | null) => CrewAssignment;
+  /** Assign crew roles to the *existing* stations in place (architect = a Claude
+   *  station if present else the first; reviewer = the last when ≥3 stations;
+   *  the rest become lane-locked builders). Used to retrofit a running grid. */
+  assignCrew: () => CrewAssignment;
   /**
    * Re-point every open station at a new working directory and restart it
    * (runKey bump → terminal remounts → old PTY is killed, a fresh shell spawns
@@ -173,6 +215,56 @@ export const useVibeStations = create<VibeStationsState>()(
           }
           return { stations };
         }),
+
+      launchCrew: (spec, cwd) => {
+        const stations: Station[] = [newStation(spec.architect, cwd, 'architect', null)];
+        const lanes: string[] = [];
+        spec.builders.forEach((agentId, i) => {
+          if (stations.length >= MAX_STATIONS) return;
+          const lane = `lane-${i + 1}`;
+          lanes.push(lane);
+          stations.push(newStation(agentId, cwd, 'builder', lane));
+        });
+        if (spec.reviewer && stations.length < MAX_STATIONS) {
+          stations.push(newStation(spec.reviewer, cwd, 'reviewer', null));
+        }
+        set({ stations, sessions: {} });
+        return {
+          architect: stations[0] ?? null,
+          builders: stations.filter((s) => s.role === 'builder'),
+          reviewer: stations.find((s) => s.role === 'reviewer') ?? null,
+          lanes,
+        };
+      },
+
+      assignCrew: () => {
+        let assignment: CrewAssignment = { architect: null, builders: [], reviewer: null, lanes: [] };
+        set((state) => {
+          const stations = state.stations;
+          if (stations.length === 0) return state;
+          const reviewerIdx = stations.length >= 3 ? stations.length - 1 : -1;
+          // Architect = a Claude station if one exists (strongest planner), else
+          // the first — but never the reviewer slot.
+          let archIdx = stations.findIndex((s) => s.agentId === 'claude');
+          if (archIdx < 0 || archIdx === reviewerIdx) archIdx = 0;
+          const lanes: string[] = [];
+          const next = stations.map((s, i) => {
+            if (i === archIdx) return { ...s, role: 'architect' as StationRole, lane: null };
+            if (i === reviewerIdx) return { ...s, role: 'reviewer' as StationRole, lane: null };
+            const lane = `lane-${lanes.length + 1}`;
+            lanes.push(lane);
+            return { ...s, role: 'builder' as StationRole, lane };
+          });
+          assignment = {
+            architect: next[archIdx] ?? null,
+            builders: next.filter((s) => s.role === 'builder'),
+            reviewer: reviewerIdx >= 0 ? next[reviewerIdx]! : null,
+            lanes,
+          };
+          return { stations: next };
+        });
+        return assignment;
+      },
 
       rescope: (cwd) =>
         set((state) => {
@@ -329,10 +421,21 @@ export function parseStationLabel(text: string): StationTarget | null {
   return { agentId, ordinal };
 }
 
+/** Human/role tag for a station, e.g. "Architect" or "Builder · lane-1". */
+export function stationRoleLabel(station: Station): string {
+  if (station.role === 'builder') {
+    return station.lane ? `Builder · ${station.lane}` : 'Builder';
+  }
+  return station.role === 'architect' ? 'Architect' : 'Reviewer';
+}
+
 /** Model-facing bullet list of the stations currently open (for the assistant). */
 export function stationManifest(stations: Station[]): string {
   if (stations.length === 0) return '(none open right now)';
   return stations
-    .map((s) => `- "${targetLabel({ agentId: s.agentId, ordinal: stationOrdinal(stations, s) })}"`)
+    .map(
+      (s) =>
+        `- "${targetLabel({ agentId: s.agentId, ordinal: stationOrdinal(stations, s) })}" (${stationRoleLabel(s)})`,
+    )
     .join('\n');
 }

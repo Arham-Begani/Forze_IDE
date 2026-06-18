@@ -25,6 +25,7 @@ import {
   MAX_STATIONS,
   MIN_STATION_HEIGHT,
   stationOrdinal,
+  stationRoleLabel,
   targetLabel,
   useVibeStations,
   type AgentId,
@@ -145,7 +146,13 @@ export default function VibeStationsPage(): JSX.Element {
                 gridRef={gridRef}
                 busStation={
                   busEnabled && workspaceRoot
-                    ? { root: workspaceRoot, agentId: station.agentId, label }
+                    ? {
+                        root: workspaceRoot,
+                        agentId: station.agentId,
+                        label,
+                        role: station.role,
+                        lane: station.lane,
+                      }
                     : undefined
                 }
                 busStatus={busStatus}
@@ -180,7 +187,7 @@ function StationCard({
   station: Station;
   columns: number;
   gridRef: React.RefObject<HTMLDivElement>;
-  busStation?: { root: string; agentId: string; label: string };
+  busStation?: { root: string; agentId: string; label: string; role?: Station['role']; lane?: string | null };
   /** Live Context Bus presence for this station's agent, when the bus is on. */
   busStatus?: { active: boolean; status: string | null } | null;
   onRestart: () => void;
@@ -283,6 +290,9 @@ function StationCard({
               }
             />
             {def.label}
+            <span className={`vibestation__role is-${station.role}`} title={`Crew role: ${stationRoleLabel(station)}`}>
+              {stationRoleLabel(station)}
+            </span>
             {busStatus?.status && (
               <span className="vibestation__status" title={busStatus.status}>
                 {busStatus.status}

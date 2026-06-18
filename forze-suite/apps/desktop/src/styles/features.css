@@ -821,6 +821,57 @@
   white-space: nowrap;
   max-width: 240px;
 }
+.bus-chip__role {
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+.bus-chip__role.is-architect {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+}
+.bus-chip__role.is-reviewer {
+  color: #f0b429;
+  background: color-mix(in srgb, #f0b429 16%, transparent);
+}
+
+/* Lanes — disjoint file areas owned by builders */
+.bus-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.bus-lane {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-size: var(--font-size-xs);
+}
+.bus-lane__name {
+  font-weight: 700;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+.bus-lane__owner {
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.bus-lane__paths {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-dim);
+}
 
 /* Shared board */
 .bus-notes {
@@ -1167,6 +1218,32 @@
 @keyframes vibe-dot-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
+}
+/* Crew role tag, shown after the agent name in the station bar. */
+.vibestation__role {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--color-text) 16%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  white-space: nowrap;
+}
+.vibestation__role.is-architect {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+.vibestation__role.is-reviewer {
+  color: #f0b429;
+  border-color: color-mix(in srgb, #f0b429 50%, transparent);
+  background: color-mix(in srgb, #f0b429 12%, transparent);
+}
+.vibestation__role.is-builder {
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
 }
 /* The agent's current forze_bus_announce status, shown inline after its name. */
 .vibestation__status {

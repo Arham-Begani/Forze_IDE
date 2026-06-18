@@ -1,12 +1,11 @@
 import { writePty } from '../lib/pty';
 import {
-  addTaskFromIde,
+  defineLaneFromIde,
   enableBusForWorkspace,
   isBusEnabled,
   postFromIde,
-  setNoteFromIde,
+  setGoalFromIde,
 } from '../lib/agentBus';
-import { generateText } from '../lib/ai';
 import { useProject } from './projectStore';
 import { useAgentBus } from './agentBusStore';
 import {
@@ -14,23 +13,29 @@ import {
   stationReady,
   targetLabel,
   useVibeStations,
+  type CrewAssignment,
   type Station,
 } from './vibeStationsStore';
 
 /**
- * Team Sync — the layer that makes the Context Bus *active* rather than just
- * available. Two jobs:
+ * Team Sync — the layer that makes the Crew Bus *active* rather than just
+ * available. It turns a goal into a working crew:
  *
- *  1. Auto-brief newly-ready stations (opt-in): type a short briefing into a
- *     station's CLI the moment it's ready, so the agent discovers the bus and
- *     starts coordinating instead of working in a silo.
- *  2. Deliver human "team commands" live: type one instruction into every
- *     running station's CLI at once (the founder superpower), recording it on
- *     the bus feed for the record.
+ *  1. Role-aware briefing: type a short, ROLE-SPECIFIC instruction into each
+ *     station's CLI when it's ready, so the Architect plans, Builders work only
+ *     their lane, and the Reviewer integrates — instead of every agent racing
+ *     the same queue and clobbering each other.
+ *  2. Live "team commands": type one instruction into every running station at
+ *     once (the founder superpower), recorded on the bus feed for the record.
  *
- * Delivery reuses the same machinery as the prompt scheduler: a station is
- * addressable once its pty session is mirrored into the store and the CLI has
- * had READY_GRACE_MS to settle (see `stationReady`).
+ * The briefs are deliberately lean: only the Architect plans (builders pull
+ * pre-scoped tasks rather than re-deriving the goal), and we tell agents to lean
+ * on forze_bus_task_next / forze_bus_sync rather than polling the board between
+ * every step. That's what keeps token use down.
+ *
+ * Delivery reuses the prompt scheduler's machinery: a station is addressable
+ * once its pty session is mirrored into the store and the CLI has had
+ * READY_GRACE_MS to settle (see `stationReady`).
  */
 
 /** A station that's booted far enough to accept a typed instruction. */
@@ -56,19 +61,79 @@ function readyStations(): ReadyStation[] {
   return out;
 }
 
+function labelOf(station: Station): string {
+  const stations = useVibeStations.getState().stations;
+  return targetLabel({ agentId: station.agentId, ordinal: stationOrdinal(stations, station) });
+}
+
+/** Derive the crew assignment from stations' already-set roles (no reassign). */
+function currentAssignment(stations: Station[]): CrewAssignment {
+  const builders = stations.filter((s) => s.role === 'builder');
+  return {
+    architect: stations.find((s) => s.role === 'architect') ?? null,
+    builders,
+    reviewer: stations.find((s) => s.role === 'reviewer') ?? null,
+    lanes: builders.map((b) => b.lane).filter((l): l is string => !!l),
+  };
+}
+
+// ---- role-aware briefings -------------------------------------------------
+
 /**
- * The onboarding briefing typed into a station's CLI. Single line (a `\r`
- * submits it), personalised with the station's bus identity so the agent knows
- * its own name. Phrased as an instruction the agent should act on immediately.
+ * The instruction typed into a station's CLI, tailored to its role. A single
+ * line (`\r` submits it). Each brief tells the agent to register its role and
+ * sync ONCE, then work the lean loop for its role — no "re-check everything
+ * before every task" busywork.
  */
-export function teamBriefing(label: string, goal?: string): string {
-  const goalLine = goal ? ` The team's goal: ${goal}.` : '';
+export function briefingFor(station: Station, allLanes: string[], goal?: string): string {
+  const label = labelOf(station);
+  const goalLine = goal ? `The goal: ${goal}. ` : 'Read the goal with forze_bus_sync. ';
+  const stationCount = useVibeStations.getState().stations.length;
+
+  // A lone station owns everything — plan AND build, no lanes.
+  if (station.role === 'architect' && stationCount <= 1) {
+    return (
+      `[Forze Crew] You are "${label}", working solo via the forze_bus_* MCP tools. ` +
+      `First call forze_bus_register {role:"architect"}. ${goalLine}` +
+      `Use the bus as your plan + checklist: call forze_bus_plan ONCE to break the goal into small scoped tasks ` +
+      `(each with the files it touches and acceptance criteria — no lanes needed, you own the whole repo), record key ` +
+      `decisions with forze_bus_note, then work the tasks one at a time, marking each forze_bus_task_update "done" as you go.`
+    );
+  }
+
+  if (station.role === 'architect') {
+    const lanes = allLanes.length ? allLanes.join(', ') : 'lane-1, lane-2';
+    return (
+      `[Forze Crew] You are "${label}", the ARCHITECT. First call forze_bus_register {role:"architect"}. ${goalLine}` +
+      `Your job is the PLAN, not the code — do NOT edit feature files. Read just enough of the repo to design, then call ` +
+      `forze_bus_plan ONCE with: lanes = [${lanes}] (one per builder, each a DISJOINT set of file paths/dirs so builders ` +
+      `never touch the same files), and tasks = small units, each with scope (the exact files it touches), its lane, ` +
+      `acceptance criteria, and dependsOn (reference earlier tasks by their title). Pin cross-cutting decisions ` +
+      `(API shapes, schemas, shared types) with forze_bus_note so builders follow them. After planning, answer hand-offs ` +
+      `via forze_bus_inbox and do final integration — leave each lane's files to its builder.`
+    );
+  }
+
+  if (station.role === 'reviewer') {
+    return (
+      `[Forze Crew] You are "${label}", the REVIEWER. First call forze_bus_register {role:"reviewer"}. ${goalLine}` +
+      `Wait for builders to finish, then loop forze_bus_task_next to pull role:"reviewer" work (integration, build, tests). ` +
+      `Run the build and the test suite, reconcile the lanes, and report problems with forze_bus_send (to the owning builder) ` +
+      `or forze_bus_note. You may edit across lanes, but claim a review task first so your files are leased. When everything ` +
+      `builds, tests pass, and the goal is met, forze_bus_announce that the crew is done.`
+    );
+  }
+
+  // builder
+  const lane = station.lane ?? '(your lane)';
   return (
-    `[Forze team] You are "${label}", one of several AI coding agents working this repo TOGETHER through the forze_bus_* MCP tools.${goalLine} ` +
-    `Work as an autonomous team: call forze_bus_whoami, then forze_bus_board and forze_bus_tasks to see shared decisions and the team TODO. ` +
-    `Then loop: call forze_bus_task_next to atomically grab the next task (race-free — no other station can take the same one), complete it fully, then forze_bus_task_update it to "done" — repeat until forze_bus_task_next returns task: null. ` +
-    `Before each task re-check forze_bus_board and forze_bus_inbox; use forze_bus_send to coordinate or hand off, ` +
-    `forze_bus_note to record decisions others must follow, and forze_bus_announce your current status. If the queue empties but the goal isn't met, add tasks with forze_bus_task_add.`
+    `[Forze Crew] You are "${label}", a BUILDER on lane "${lane}". First call forze_bus_register {role:"builder", lane:"${lane}"}, ` +
+    `then forze_bus_sync. ${goalLine}` +
+    `Work ONLY files inside your lane (forze_bus_sync shows your lane's paths). Loop: forze_bus_task_next hands you a lane task ` +
+    `race-free → complete it to its acceptance, editing only your lane → forze_bus_task_update it "done" → repeat until ` +
+    `task_next returns null. If your lane has no paths yet, the Architect is still planning — wait a few seconds and ` +
+    `forze_bus_sync again. Never edit another lane; if you need a change there, forze_bus_send that station. Don't re-read ` +
+    `the whole board between tasks — task_next already gives you what you need.`
   );
 }
 
@@ -77,19 +142,23 @@ const briefed = new Set<string>();
 const briefKey = (s: Station): string => `${s.id}:${s.runKey}`;
 
 /**
- * Brief ready stations now. Returns the labels briefed. By default skips a
- * station already briefed this run (used by the auto-runner + "Brief the team");
- * `force` re-briefs regardless (used when kicking off a new goal). An optional
- * `goal` is woven into the briefing.
+ * Brief ready stations now, each with the briefing for its role. By default
+ * skips a station already briefed this run; `force` re-briefs regardless (used
+ * when kicking off a new goal). An optional `goal` is woven into the briefing.
  */
 export async function briefReadyStations(goal?: string, force = false): Promise<string[]> {
   const ready = readyStations();
+  const allLanes = useVibeStations
+    .getState()
+    .stations.filter((s) => s.role === 'builder')
+    .map((s) => s.lane)
+    .filter((l): l is string => !!l);
   const delivered: string[] = [];
   for (const r of ready) {
     if (!force && briefed.has(briefKey(r.station))) continue;
     briefed.add(briefKey(r.station));
     try {
-      await writePty(r.sessionId, `${teamBriefing(r.label, goal)}\r`);
+      await writePty(r.sessionId, `${briefingFor(r.station, allLanes, goal)}\r`);
       delivered.push(r.label);
     } catch {
       if (!force) briefed.delete(briefKey(r.station)); // let a failed brief retry later
@@ -124,55 +193,68 @@ export async function runOnAllStations(root: string, text: string): Promise<stri
   return delivered;
 }
 
-// ---- one-shot: give the whole team a goal --------------------------------
-
-/** Ask the model to break a goal into a few concrete, independent tasks. */
-export async function splitGoalIntoTasks(goal: string): Promise<string[]> {
-  try {
-    const out = await generateText(
-      `Break this software goal into 3 to 6 small, concrete, independent tasks that separate coding agents could each pick up in parallel. ` +
-        `Goal: "${goal}". Output ONLY the tasks, one per line, each a short imperative phrase. No numbering, bullets, or commentary.`,
-      { maxTokens: 300 },
-    );
-    const tasks = out
-      .split(/\r?\n/)
-      .map((l) => l.replace(/^[-*\d.)\s]+/, '').trim())
-      .filter((l) => l.length > 0 && l.length < 200)
-      .slice(0, 6);
-    return tasks.length ? tasks : [goal];
-  } catch {
-    // No model / failure → still useful: one task = the goal itself.
-    return [goal];
-  }
-}
+// ---- one-shot: put the crew on a goal -------------------------------------
 
 export interface StartGoalResult {
-  tasks: string[];
   briefed: string[];
   stationsRunning: number;
+  /** Assigned crew (labels for display). */
+  architect: string | null;
+  builders: number;
+  reviewer: string | null;
+  lanes: string[];
 }
 
 /**
- * One action that does everything: enable the bus if needed, split the goal into
- * tasks on the shared queue, pin the goal to the board, flip on auto-brief, and
- * brief every running station to work the queue together. After this the user
- * does nothing — the agents self-assign and collaborate until the queue drains.
+ * Put the crew on a goal. Enables the bus if needed, assigns roles+lanes across
+ * the running stations (Architect / Builders / Reviewer), seeds the goal and the
+ * (empty) builder lanes onto the bus, flips on auto-brief so late-booting
+ * stations join, and briefs everyone for their role. After this the user does
+ * nothing — the Architect plans, builders work their lanes, the Reviewer
+ * integrates.
+ *
+ * `opts.assign` (default true) reassigns roles by position; pass false when the
+ * stations were launched as an explicit crew (launchCrew) and already have them.
  */
-export async function startTeamGoal(root: string, goal: string): Promise<StartGoalResult> {
+export async function startTeamGoal(
+  root: string,
+  goal: string,
+  opts: { assign?: boolean } = {},
+): Promise<StartGoalResult> {
   const g = goal.trim();
-  if (!root || !g) return { tasks: [], briefed: [], stationsRunning: 0 };
+  const empty: StartGoalResult = {
+    briefed: [],
+    stationsRunning: 0,
+    architect: null,
+    builders: 0,
+    reviewer: null,
+    lanes: [],
+  };
+  if (!root || !g) return empty;
 
   if (!(await isBusEnabled(root))) await enableBusForWorkspace(root);
-  const tasks = await splitGoalIntoTasks(g);
-  await setNoteFromIde(root, 'goal', g);
-  for (const t of tasks) await addTaskFromIde(root, t);
 
-  // Future stations should auto-join and find the goal+queue on the board.
+  const vibe = useVibeStations.getState();
+  const assign = opts.assign ?? true;
+  const crew = assign ? vibe.assignCrew() : currentAssignment(vibe.stations);
+
+  await setGoalFromIde(root, g);
+  // Pre-create the builder lanes (empty paths) so a builder can claim ownership
+  // of its lane before the Architect has filled in the paths.
+  for (const lane of crew.lanes) await defineLaneFromIde(root, lane);
+
+  // Late-booting stations should auto-join and get their role brief.
   useAgentBus.getState().setAutoBrief(true);
-  // Brief everyone running right now (force: re-brief even if already briefed).
-  const briefed = await briefReadyStations(g, true);
+  const delivered = await briefReadyStations(g, true);
 
-  return { tasks, briefed, stationsRunning: readyStations().length };
+  return {
+    briefed: delivered,
+    stationsRunning: readyStations().length,
+    architect: crew.architect ? labelOf(crew.architect) : null,
+    builders: crew.builders.length,
+    reviewer: crew.reviewer ? labelOf(crew.reviewer) : null,
+    lanes: crew.lanes,
+  };
 }
 
 // ---- auto-brief background runner ----------------------------------------

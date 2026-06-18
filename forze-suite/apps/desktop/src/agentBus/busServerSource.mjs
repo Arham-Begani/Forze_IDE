@@ -1,21 +1,36 @@
 #!/usr/bin/env node
 // ---------------------------------------------------------------------------
-// Forze Context Bus — standalone MCP server.
+// Forze Crew Bus — standalone MCP server.
 //
 // This file is written verbatim into a workspace as `.forze/bus-server.mjs` by
 // the Forze IDE (see lib/agentBus.ts) and registered as an MCP server in each
 // Vibe Station CLI's config. It is intentionally DEPENDENCY-FREE — a single
 // Node ESM file using only the standard library — so it runs from any workspace
-// with nothing but `node` on PATH, no install step, no node_modules, no bundled
-// path to resolve.
+// with nothing but `node` on PATH, no install step, no node_modules.
 //
 // It speaks the MCP stdio transport (newline-delimited JSON-RPC 2.0) by hand,
 // exposing a handful of `forze_bus_*` tools backed by a shared JSON file
-// (`.forze/bus.json`). Every Vibe Station points its CLI at this same server;
-// the station's *identity* arrives via the FORZE_STATION env var (set by the
-// IDE in the launch keystroke), so one shared config gives each station a
-// distinct voice on the bus. The Forze IDE reads/writes the same bus.json to
-// render the live Bus panel.
+// (`.forze/bus.json`). Every Vibe Station points its CLI at this same server.
+//
+// THE CREW MODEL (v2). Each station has a ROLE and (for builders) a LANE,
+// arriving via FORZE_ROLE / FORZE_LANE env (set by the IDE launch keystroke) or
+// a one-time forze_bus_register call:
+//   - architect : plans ONCE via forze_bus_plan — defines lanes (disjoint path
+//                 sets) and scoped tasks. Does not edit feature code.
+//   - builder   : pulls ONLY tasks in its lane via forze_bus_task_next, edits
+//                 ONLY files inside its lane.
+//   - reviewer  : pulls role:"reviewer" tasks, runs build/tests, integrates.
+//
+// COLLISIONS ARE PREVENTED SERVER-SIDE, not by politeness: every claimed task
+// holds a *path lease* over its scope. task_next/task_claim refuse any task
+// whose files overlap a lease held by another station, so two agents can never
+// hold the same files at once. Tasks also carry dependsOn, so a task isn't
+// handed out until its prerequisites are done.
+//
+// TOKEN EFFICIENCY: only the architect plans (the rest pull pre-scoped tasks
+// instead of re-deriving the goal), and task_next returns enough orient context
+// (your lane paths, the goal, unread count) that builders rarely need extra
+// round-trips. forze_bus_sync is the one-call orient for everything else.
 //
 // DO NOT add imports beyond node: builtins. The zero-dependency property is the
 // whole point.
@@ -30,10 +45,25 @@ const BUS_FILE =
   path.join(process.cwd(), '.forze', 'bus.json');
 const PROTOCOL_VERSION = '2024-11-05';
 
+const ROLES = new Set(['architect', 'builder', 'reviewer']);
+function normalizeRole(value) {
+  const r = String(value ?? '').trim().toLowerCase();
+  if (ROLES.has(r)) return r;
+  if (r === 'lead' || r === 'planner') return 'architect';
+  if (r === 'integrator' || r === 'qa' || r === 'tester') return 'reviewer';
+  if (r === 'worker' || r === 'dev' || r === 'developer') return 'builder';
+  return '';
+}
+
+// Mutable identity: seeded from env, overridable by forze_bus_register so a
+// station retrofitted onto a crew (briefed after launch) can declare its role.
+let selfRole = normalizeRole(process.env.FORZE_ROLE);
+let selfLane = (process.env.FORZE_LANE || '').trim();
+
 // ---- bus file IO (best-effort atomic read-modify-write) -------------------
 
 function emptyBus() {
-  return { version: 1, messages: [], board: {}, roster: {}, tasks: [] };
+  return { version: 2, goal: null, lanes: {}, messages: [], board: {}, roster: {}, tasks: [] };
 }
 
 async function readBus() {
@@ -41,7 +71,9 @@ async function readBus() {
     const raw = await fs.readFile(BUS_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
     return {
-      version: 1,
+      version: 2,
+      goal: typeof parsed.goal === 'string' ? parsed.goal : null,
+      lanes: parsed.lanes && typeof parsed.lanes === 'object' ? parsed.lanes : {},
       messages: Array.isArray(parsed.messages) ? parsed.messages : [],
       board: parsed.board && typeof parsed.board === 'object' ? parsed.board : {},
       roster: parsed.roster && typeof parsed.roster === 'object' ? parsed.roster : {},
@@ -137,7 +169,18 @@ function newId() {
 
 function touchRoster(bus, extra) {
   const prev = bus.roster[STATION] || {};
-  bus.roster[STATION] = { ...prev, lastSeen: Date.now(), ...extra };
+  bus.roster[STATION] = {
+    ...prev,
+    lastSeen: Date.now(),
+    ...(selfRole ? { role: selfRole } : {}),
+    ...(selfLane ? { lane: selfLane } : {}),
+    ...extra,
+  };
+  // A builder owns its lane the moment it shows up, so two builders never share
+  // one. First come, first served; we never steal an existing owner.
+  if (selfRole === 'builder' && selfLane && bus.lanes[selfLane] && !bus.lanes[selfLane].owner) {
+    bus.lanes[selfLane].owner = STATION;
+  }
 }
 
 /** Coerce + trim + cap a string arg; '' when missing. */
@@ -145,10 +188,132 @@ function str(value, max = 4000) {
   return String(value ?? '').slice(0, max).trim();
 }
 
+/** Coerce an arg into a clean string array (paths, ids, …). */
+function strArray(value, max = 200) {
+  if (Array.isArray(value)) {
+    return value.map((v) => str(v, max)).filter(Boolean).slice(0, 64);
+  }
+  const s = str(value, max * 4);
+  if (!s) return [];
+  // Tolerate a comma/newline-separated string where an array was expected.
+  return s.split(/[\n,]+/).map((v) => v.trim()).filter(Boolean).slice(0, 64);
+}
+
 /** Thrown for a bad tool argument — surfaced to the agent as a clean error. */
 class BusInputError extends Error {}
 
 const TASK_STATUSES = new Set(['todo', 'doing', 'done', 'blocked']);
+
+// ---- path lanes + leases (the anti-collision core) ------------------------
+
+/**
+ * Normalize a scope entry to a comparable path: forward slashes, no leading
+ * `./`, no trailing slash, and glob tails (`/**`, `/*.ts`) stripped down to the
+ * directory they live under. So "src/ui/**", "src/ui/", and "./src/ui" all
+ * compare equal to "src/ui".
+ */
+function normScope(p) {
+  return String(p ?? '')
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/\/+$/, '')
+    .replace(/\/\*\*?$/, '')
+    .replace(/\/\*\.[^/]*$/, '')
+    .replace(/\/+$/, '')
+    .trim();
+}
+
+/** Do two normalized paths refer to overlapping file trees? (equal, or one a
+ *  parent dir of the other). Empty paths overlap nothing — an unscoped task
+ *  leases nothing rather than locking the whole repo. */
+function pathOverlap(a, b) {
+  const x = normScope(a);
+  const y = normScope(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  return x.startsWith(`${y}/`) || y.startsWith(`${x}/`);
+}
+
+function scopesOverlap(A, B) {
+  for (const a of A || []) for (const b of B || []) if (pathOverlap(a, b)) return true;
+  return false;
+}
+
+function lanePaths(bus, lane) {
+  const l = lane && bus.lanes ? bus.lanes[lane] : null;
+  return l && Array.isArray(l.paths) ? l.paths : [];
+}
+
+/** The files a task actually touches: its explicit scope, else its lane's paths. */
+function effectiveScope(bus, task) {
+  if (Array.isArray(task.scope) && task.scope.length) return task.scope;
+  return lanePaths(bus, task.lane);
+}
+
+/** Tasks currently in flight under another station — their scopes are leased. */
+function activeLeases(bus, exceptStation) {
+  return bus.tasks.filter((t) => t.status === 'doing' && t.owner && t.owner !== exceptStation);
+}
+
+/** Would claiming `task` collide with a file another station is already editing? */
+function leaseConflict(bus, task, exceptStation) {
+  const mine = effectiveScope(bus, task);
+  if (!mine.length) return null; // unscoped → leases nothing, can't conflict
+  for (const lease of activeLeases(bus, exceptStation)) {
+    if (scopesOverlap(mine, effectiveScope(bus, lease))) return lease;
+  }
+  return null;
+}
+
+/** Does this role+lane caller get to work this task? */
+function roleAllows(role, lane, task) {
+  const trole = normalizeRole(task.role) || 'builder';
+  if (role === 'reviewer') return trole === 'reviewer';
+  if (role === 'architect') {
+    // The architect handles its own tasks and any UNLANED builder work (shared
+    // scaffolding, or solo mode where it owns everything) — but never a builder
+    // lane, which belongs to that lane's builder.
+    return trole === 'architect' || (trole === 'builder' && !task.lane);
+  }
+  // builder (or unknown/retrofit role): never the reviewer's or architect's job.
+  if (trole === 'reviewer' || trole === 'architect') return false;
+  // A laned task is only for that lane's builder; an unlaned task is open to any.
+  if (task.lane && lane) return task.lane === lane;
+  return true;
+}
+
+/** Are all of a task's known prerequisites done? (Unknown ids are ignored so a
+ *  stale reference can't deadlock the queue.) */
+function depsSatisfied(bus, task) {
+  const deps = Array.isArray(task.dependsOn) ? task.dependsOn : [];
+  if (!deps.length) return true;
+  const doneIds = new Set(bus.tasks.filter((t) => t.status === 'done').map((t) => t.id));
+  const knownIds = new Set(bus.tasks.map((t) => t.id));
+  return deps.filter((id) => knownIds.has(id)).every((id) => doneIds.has(id));
+}
+
+/** The blocker (a not-yet-done dependency) holding a task back, for messaging. */
+function pendingDep(bus, task) {
+  const deps = Array.isArray(task.dependsOn) ? task.dependsOn : [];
+  return bus.tasks.find((t) => deps.includes(t.id) && t.status !== 'done') || null;
+}
+
+/** Public shape of a task returned to agents. */
+function publicTask(task) {
+  return {
+    id: task.id,
+    title: task.title,
+    detail: task.detail || null,
+    status: task.status,
+    owner: task.owner || null,
+    lane: task.lane || null,
+    role: task.role || 'builder',
+    scope: Array.isArray(task.scope) ? task.scope : [],
+    acceptance: task.acceptance || null,
+    dependsOn: Array.isArray(task.dependsOn) ? task.dependsOn : [],
+    mine: task.owner === STATION,
+  };
+}
 
 /** Find a task by id, or throw a helpful error listing valid ids. */
 function requireTask(bus, id) {
@@ -160,31 +325,204 @@ function requireTask(bus, id) {
   return task;
 }
 
+/** A compact orient snapshot — your identity, the goal, your lane, the next
+ *  task you could claim — assembled fresh from the bus. Cheap to embed in any
+ *  tool result so callers rarely need a second round-trip. */
+function orient(bus) {
+  const lane = selfLane || null;
+  const role = selfRole || 'builder';
+  const myDoing = bus.tasks.find((t) => t.owner === STATION && t.status === 'doing') || null;
+  // Peek (do not claim) the task this caller would pull next.
+  const next = bus.tasks.find(
+    (t) =>
+      t.status === 'todo' &&
+      !t.owner &&
+      roleAllows(role, lane, t) &&
+      depsSatisfied(bus, t) &&
+      !leaseConflict(bus, t, STATION),
+  );
+  const open = bus.tasks.filter((t) => t.status !== 'done').length;
+  return {
+    you: { station: STATION, role, lane },
+    goal: bus.goal || null,
+    yourLane: lane ? { name: lane, paths: lanePaths(bus, lane) } : null,
+    current: myDoing ? publicTask(myDoing) : null,
+    nextUp: next ? publicTask(next) : null,
+    openTasks: open,
+  };
+}
+
 // ---- tool implementations -------------------------------------------------
 
 const TOOLS = {
-  forze_bus_whoami: {
+  forze_bus_sync: {
     description:
-      'Identify yourself on the Forze Context Bus. Returns your station name and who else is online. Call this first so you know your own name and your teammates.',
+      'Orient yourself on the Forze Crew Bus in ONE call — the first thing to do, and the thing to do whenever you finish a task or get stuck. Returns: who you are (your role + lane), the team goal, the file paths your lane owns, your current in-progress task, the next task you could claim, the shared decisions board, your teammates, and any messages addressed to you (advancing your read cursor). Prefer this over calling whoami/board/tasks/inbox separately.',
     inputSchema: { type: 'object', properties: {} },
     async run() {
-      const bus = await mutateBus((b) => {
+      const snapshot = await mutateBus((b) => {
         touchRoster(b);
-        return b;
+        const cursor = b.roster[STATION]?.lastRead ?? 0;
+        const relevant = b.messages.filter((m) => m.to === STATION || m.to === 'all' || m.from === STATION);
+        const unread = relevant.filter((m) => m.ts > cursor);
+        const newestTs = relevant.reduce((max, m) => (m.ts > max ? m.ts : max), cursor);
+        b.roster[STATION].lastRead = newestTs;
+        const view = orient(b);
+        const board = Object.entries(b.board).map(([key, info]) => ({ key, value: info.value, by: info.by ?? null }));
+        const teammates = Object.entries(b.roster)
+          .filter(([s]) => s !== STATION)
+          .map(([station, info]) => ({ station, role: info.role ?? null, lane: info.lane ?? null, status: info.status ?? null }));
+        return {
+          ...view,
+          board,
+          teammates,
+          inbox: unread.map((m) => ({ from: m.from, to: m.to, text: m.text, ago: `${Math.round((Date.now() - m.ts) / 1000)}s ago` })),
+          hint: hintFor(view),
+        };
       });
-      const others = Object.keys(bus.roster).filter((s) => s !== STATION);
-      return {
-        you: STATION,
-        busFile: BUS_FILE,
-        teammates: others,
-        hint: 'Start of work: check forze_bus_board (decisions) and forze_bus_tasks (the shared TODO). Then loop: forze_bus_task_next to grab the next task race-free, do it, forze_bus_task_update it to "done" — repeat until task is null. Coordinate with forze_bus_send/forze_bus_inbox; forze_bus_announce your status.',
-      };
+      return snapshot;
+    },
+  },
+
+  forze_bus_register: {
+    description:
+      'Declare (or correct) your role and lane on the crew. Normally this comes from how the IDE launched you, but call it once if you were told your role in a briefing: architect (plans + scopes work, no feature edits), builder (works one lane only), or reviewer (integrates + tests). Builders should pass their lane name too.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        role: { type: 'string', description: '"architect", "builder", or "reviewer".' },
+        lane: { type: 'string', description: 'For builders: the lane name you own (e.g. "ui", "api").' },
+      },
+    },
+    async run(args) {
+      const role = normalizeRole(args?.role);
+      if (args?.role && !role) throw new BusInputError('role must be "architect", "builder", or "reviewer".');
+      if (role) selfRole = role;
+      if (args?.lane !== undefined) selfLane = str(args.lane, 80);
+      const view = await mutateBus((b) => {
+        touchRoster(b);
+        return orient(b);
+      });
+      return { ok: true, ...view };
+    },
+  },
+
+  forze_bus_plan: {
+    description:
+      'ARCHITECT ONLY. Lay down the whole plan in ONE call so builders never have to re-derive it: set the goal, define the lanes (each a DISJOINT set of file paths/dirs, one per builder — this is what stops agents colliding), and add the scoped tasks. Every task should name the files it will touch (scope), the lane it belongs to, its acceptance criteria, and any tasks it dependsOn (reference earlier tasks in THIS call by their exact title or 1-based number). Re-running merges: it updates the goal/lanes and appends new tasks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        goal: { type: 'string', description: 'The overall objective (optional if already set).' },
+        lanes: {
+          type: 'array',
+          description: 'Disjoint work areas, one per builder. Each: { name, paths: string[], desc? }.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              paths: { type: 'array', items: { type: 'string' } },
+              desc: { type: 'string' },
+            },
+            required: ['name', 'paths'],
+          },
+        },
+        tasks: {
+          type: 'array',
+          description:
+            'The work, broken into independent units. Each: { title, detail?, scope: string[], lane?, role?, acceptance?, dependsOn?: string[] }. dependsOn entries may be the title or 1-based index of another task in this call.',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              detail: { type: 'string' },
+              scope: { type: 'array', items: { type: 'string' } },
+              lane: { type: 'string' },
+              role: { type: 'string' },
+              acceptance: { type: 'string' },
+              dependsOn: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['title'],
+          },
+        },
+      },
+    },
+    async run(args) {
+      const goal = str(args?.goal, 2000);
+      const lanes = Array.isArray(args?.lanes) ? args.lanes : [];
+      const incoming = Array.isArray(args?.tasks) ? args.tasks : [];
+      const result = await mutateBus((b) => {
+        if (goal) b.goal = goal;
+        // Upsert lanes (preserve any existing owner so a re-plan doesn't evict).
+        const laneNames = [];
+        for (const l of lanes) {
+          const name = str(l?.name, 80);
+          if (!name) continue;
+          b.lanes[name] = {
+            paths: strArray(l?.paths),
+            desc: str(l?.desc, 400) || (b.lanes[name]?.desc ?? ''),
+            owner: b.lanes[name]?.owner ?? null,
+          };
+          laneNames.push(name);
+        }
+        // First pass: create every task and remember title/index → id.
+        const byKey = new Map();
+        const created = [];
+        incoming.forEach((t, i) => {
+          const title = str(t?.title, 280);
+          if (!title) return;
+          const task = {
+            id: newId(),
+            title,
+            detail: str(t?.detail, 4000),
+            status: 'todo',
+            owner: null,
+            lane: str(t?.lane, 80) || null,
+            role: normalizeRole(t?.role) || 'builder',
+            scope: strArray(t?.scope),
+            acceptance: str(t?.acceptance, 1000) || null,
+            dependsOn: [], // resolved in the second pass
+            _rawDeps: strArray(t?.dependsOn, 280),
+            createdBy: STATION,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+          byKey.set(title.toLowerCase(), task.id);
+          byKey.set(String(i + 1), task.id);
+          created.push(task);
+        });
+        // Second pass: resolve dependsOn (title or 1-based index) to real ids.
+        for (const task of created) {
+          task.dependsOn = task._rawDeps
+            .map((d) => byKey.get(d.toLowerCase()) || byKey.get(d) || null)
+            .filter((id) => id && id !== task.id);
+          delete task._rawDeps;
+          b.tasks.push(task);
+        }
+        touchRoster(b);
+        return { goal: b.goal, lanes: laneNames, tasksAdded: created.length, taskIds: created.map((t) => t.id) };
+      });
+      return { ok: true, ...result, hint: 'Plan recorded. Builders will pull their lane tasks via forze_bus_task_next. Announce you are done planning with forze_bus_announce, then you may take role:"architect" tasks or help integrate.' };
+    },
+  },
+
+  forze_bus_whoami: {
+    description:
+      'Identify yourself on the bus (your role, lane, and the goal) and see who else is online. forze_bus_sync gives the same plus your tasks and inbox — prefer sync once you are working.',
+    inputSchema: { type: 'object', properties: {} },
+    async run() {
+      const view = await mutateBus((b) => {
+        touchRoster(b);
+        const teammates = Object.keys(b.roster).filter((s) => s !== STATION);
+        return { ...orient(b), busFile: BUS_FILE, teammates };
+      });
+      return { ...view, hint: hintFor(view) };
     },
   },
 
   forze_bus_announce: {
     description:
-      'Tell the team what you are currently working on. Sets your status on the shared roster so other agents (and the human) avoid stepping on your work.',
+      'Tell the team what you are working on right now. Sets your status on the roster so others (and the human) can see progress at a glance. Keep it to genuine state changes — this is not a running log.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -204,13 +542,15 @@ const TOOLS = {
 
   forze_bus_roster: {
     description:
-      'List every agent station currently known to the bus, with each one\'s last announced status. Use this to see who is doing what before you start.',
+      'List every station on the crew with its role, lane, and last announced status. Use it to see who owns what before you start.',
     inputSchema: { type: 'object', properties: {} },
     async run() {
       const bus = await readBus();
       const now = Date.now();
       const roster = Object.entries(bus.roster).map(([station, info]) => ({
         station,
+        role: info.role ?? null,
+        lane: info.lane ?? null,
         status: info.status ?? null,
         isYou: station === STATION,
         secondsSinceSeen:
@@ -222,7 +562,7 @@ const TOOLS = {
 
   forze_bus_send: {
     description:
-      'Send a message to another agent station, or broadcast to everyone. Use this to coordinate, hand off work, ask a question, or share a finding. Address it to a teammate\'s exact station name (see forze_bus_roster) or to "all".',
+      'Send a message to another station, or broadcast to "all". Use it for genuine coordination: a hand-off, a question, a heads-up that you need a change in someone else\'s lane. Address it to a station\'s exact name (see forze_bus_roster) or "all".',
     inputSchema: {
       type: 'object',
       properties: {
@@ -247,7 +587,7 @@ const TOOLS = {
 
   forze_bus_inbox: {
     description:
-      'Read messages addressed to you (or broadcast to "all") that you have not seen yet. Advances your read cursor, so each call returns only what is new. Pass {"all": true} to instead see the full recent conversation.',
+      'Read messages addressed to you (or broadcast to "all") that you have not seen yet. Advances your read cursor, so each call returns only what is new. Pass {"all": true} to see the recent conversation instead. (forze_bus_sync also returns your unread inbox.)',
     inputSchema: {
       type: 'object',
       properties: {
@@ -290,7 +630,7 @@ const TOOLS = {
 
   forze_bus_note: {
     description:
-      'Write a shared note onto the team board — a decision, an API contract, a convention, a TODO. Other agents read these with forze_bus_board. Use a stable key (e.g. "api-contract", "db-schema", "decisions") to update the same note over time.',
+      'Write a shared note onto the team board — a decision, an API contract, a convention. Other agents read these with forze_bus_board (and forze_bus_sync). Use a stable key (e.g. "api-contract", "db-schema") to update the same note over time.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -314,7 +654,7 @@ const TOOLS = {
 
   forze_bus_board: {
     description:
-      'Read the shared team board — every note other agents (and you) have written: decisions, contracts, conventions. Check this before making assumptions about shared structure.',
+      'Read the shared team board — every decision, contract, and convention other agents (and you) have written. Check it before making assumptions about shared structure.',
     inputSchema: { type: 'object', properties: {} },
     async run() {
       const bus = await readBus();
@@ -324,18 +664,15 @@ const TOOLS = {
         by: info.by ?? null,
         updated: typeof info.ts === 'number' ? `${Math.round((Date.now() - info.ts) / 1000)}s ago` : null,
       }));
-      return { notes };
+      return { goal: bus.goal || null, notes };
     },
   },
 
   // ---- shared task queue --------------------------------------------------
-  // A persistent, shared TODO list. The human (Forze panel) and every agent
-  // read and write the same queue, so work survives restarts, agents can pick
-  // up and hand off tasks, and nobody does the same thing twice.
 
   forze_bus_tasks: {
     description:
-      'List the shared task queue for this project — the team TODO. Returns each task with its status (todo/doing/done/blocked) and owner. Call this at the start of your work to see what needs doing and what others have already claimed. Optionally filter by status.',
+      'List the shared task queue — the team plan. Each task shows its status, owner, lane, scope (the files it touches), and dependsOn. Optionally filter by status. forze_bus_task_next is the right way to PULL work; this is for an overview.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -351,14 +688,8 @@ const TOOLS = {
       let tasks = bus.tasks;
       if (filter && TASK_STATUSES.has(filter)) tasks = tasks.filter((t) => t.status === filter);
       return {
-        tasks: tasks.map((t) => ({
-          id: t.id,
-          title: t.title,
-          detail: t.detail || null,
-          status: t.status,
-          owner: t.owner || null,
-          mine: t.owner === STATION,
-        })),
+        goal: bus.goal || null,
+        tasks: tasks.map(publicTask),
         open: bus.tasks.filter((t) => t.status !== 'done').length,
       };
     },
@@ -366,25 +697,34 @@ const TOOLS = {
 
   forze_bus_task_add: {
     description:
-      'Add a task to the shared queue for someone (you or a teammate) to pick up. Use this to capture work, split a big job into pieces, or hand off a follow-up. Returns the new task id.',
+      'Add a single task to the queue. Prefer forze_bus_plan if you are the architect laying out the whole plan. Give it a scope (the files it touches) and a lane so it is collision-safe and routed to the right builder.',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Short imperative title, e.g. "Add auth middleware".' },
         detail: { type: 'string', description: 'Optional longer description / acceptance criteria.' },
+        scope: { type: 'array', items: { type: 'string' }, description: 'Files/dirs this task will touch.' },
+        lane: { type: 'string', description: 'Lane this belongs to (optional).' },
+        role: { type: 'string', description: '"builder" (default), "reviewer", or "architect".' },
+        acceptance: { type: 'string', description: 'Done-criteria (optional).' },
+        dependsOn: { type: 'array', items: { type: 'string' }, description: 'Task ids that must finish first.' },
       },
       required: ['title'],
     },
     async run(args) {
       const title = str(args?.title, 280);
       if (!title) throw new BusInputError('A task needs a title.');
-      const detail = str(args?.detail, 4000);
       const task = {
         id: newId(),
         title,
-        detail,
+        detail: str(args?.detail, 4000),
         status: 'todo',
         owner: null,
+        lane: str(args?.lane, 80) || null,
+        role: normalizeRole(args?.role) || 'builder',
+        scope: strArray(args?.scope),
+        acceptance: str(args?.acceptance, 1000) || null,
+        dependsOn: strArray(args?.dependsOn, 64),
         createdBy: STATION,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -394,13 +734,13 @@ const TOOLS = {
         touchRoster(b);
         return b;
       });
-      return { ok: true, task };
+      return { ok: true, task: publicTask(task) };
     },
   },
 
   forze_bus_task_claim: {
     description:
-      'Claim a task so teammates know you own it — sets the owner to you and the status to "doing". Claim before you start so two agents never work the same task. Refuses a task already owned by someone else (unless it\'s yours).',
+      'Claim a specific task by id — sets owner to you and status to "doing", which LEASES its files so nobody edits them under you. Refused if the task is owned by someone else, its dependencies are not done, it is not for your role/lane, or its files overlap a task another station is already editing. Usually you want forze_bus_task_next instead.',
     inputSchema: {
       type: 'object',
       properties: { id: { type: 'string', description: 'The task id (from forze_bus_tasks).' } },
@@ -415,6 +755,17 @@ const TOOLS = {
         if (task.owner && task.owner !== STATION && task.status !== 'done') {
           throw new BusInputError(`Task "${task.title}" is already owned by ${task.owner}. Pick another, or coordinate via forze_bus_send.`);
         }
+        if (!depsSatisfied(b, task)) {
+          const dep = pendingDep(b, task);
+          throw new BusInputError(`Task "${task.title}" is blocked on "${dep ? dep.title : 'a prerequisite'}" — not done yet. Take an unblocked task instead.`);
+        }
+        if (!roleAllows(selfRole || 'builder', selfLane || null, task)) {
+          throw new BusInputError(`Task "${task.title}" isn't for your role/lane (${selfRole || 'builder'}${selfLane ? `/${selfLane}` : ''}). It is ${task.role || 'builder'}${task.lane ? `/${task.lane}` : ''} work.`);
+        }
+        const conflict = leaseConflict(b, task, STATION);
+        if (conflict) {
+          throw new BusInputError(`Task "${task.title}" touches files ${conflict.owner} is editing right now ("${conflict.title}"). Wait for it, or pick a task in different files.`);
+        }
         task.owner = STATION;
         task.status = 'doing';
         task.updatedAt = Date.now();
@@ -422,46 +773,64 @@ const TOOLS = {
         touchRoster(b);
         return b;
       });
-      return { ok: true, task: claimed };
+      return { ok: true, task: publicTask(claimed) };
     },
   },
 
   forze_bus_task_next: {
     description:
-      'Atomically claim the next available task — the oldest unclaimed "todo" — in ONE locked step, setting its owner to you and status to "doing". This is the race-free way to pull work: prefer it over listing then claiming, since no other station can grab the same task in the gap. Returns the claimed task, or {task: null} with guidance when there is no unclaimed work left.',
+      'Pull your next task race-free — atomically claims the oldest available task FOR YOUR ROLE AND LANE in one locked step, leasing its files so no one collides with you. Skips anything owned, blocked by an unfinished dependency, out of your lane, or whose files another station is already editing. Returns the claimed task PLUS your orient context (lane paths, goal, unread count) so you can start immediately. Returns {task: null} with guidance when there is nothing for you to do.',
     inputSchema: { type: 'object', properties: {} },
     async run() {
-      let claimed = null;
-      let openCount = 0;
-      await mutateBus((b) => {
-        // Oldest-first: b.tasks is append-ordered, so the first matching task is
-        // the longest-waiting one. Skip blocked/doing/done and anything owned.
-        const next = b.tasks.find((t) => t.status === 'todo' && !t.owner);
+      const out = await mutateBus((b) => {
+        const role = selfRole || 'builder';
+        const lane = selfLane || null;
+        const next = b.tasks.find(
+          (t) =>
+            t.status === 'todo' &&
+            !t.owner &&
+            roleAllows(role, lane, t) &&
+            depsSatisfied(b, t) &&
+            !leaseConflict(b, t, STATION),
+        );
         if (next) {
           next.owner = STATION;
           next.status = 'doing';
           next.updatedAt = Date.now();
-          claimed = next;
         }
-        openCount = b.tasks.filter((t) => t.status !== 'done').length;
         touchRoster(b);
-        return b;
+        const cursor = b.roster[STATION]?.lastRead ?? 0;
+        const unread = b.messages.filter(
+          (m) => (m.to === STATION || m.to === 'all') && m.from !== STATION && m.ts > cursor,
+        ).length;
+        const view = orient(b);
+        return { next: next ? publicTask(next) : null, view, unread };
       });
-      if (claimed) return { ok: true, task: claimed };
-      return {
-        ok: true,
-        task: null,
-        message:
-          openCount > 0
-            ? 'No unclaimed "todo" tasks — every open task is already owned or blocked. See forze_bus_tasks; coordinate via forze_bus_send before duplicating work, or help unblock a "blocked" task.'
-            : 'The task queue is empty. If the goal is not yet met, break it down with forze_bus_task_add; otherwise forze_bus_announce that you are done.',
-      };
+
+      if (out.next) {
+        return {
+          ok: true,
+          task: out.next,
+          you: out.view.you,
+          goal: out.view.goal,
+          lanePaths: out.view.yourLane ? out.view.yourLane.paths : [],
+          unread: out.unread,
+          hint:
+            out.unread > 0
+              ? `You have ${out.unread} unread message(s) — check forze_bus_inbox if this task depends on a hand-off. Then complete the task within your scope and mark it done.`
+              : 'Complete the task within its scope, then forze_bus_task_update it to "done" and call forze_bus_task_next again.',
+        };
+      }
+
+      // Nothing claimable — explain why so the agent does the right thing.
+      const reason = await describeEmptyQueue();
+      return { ok: true, task: null, ...reason };
     },
   },
 
   forze_bus_task_update: {
     description:
-      'Update a task: change its status (todo/doing/done/blocked), revise the detail, or hand it to another station. Mark a task "done" the moment you finish so others can build on it; mark it "blocked" (with detail explaining why) if you\'re stuck.',
+      'Update a task: change its status (todo/doing/done/blocked), revise the detail, or hand it to another station. Mark it "done" the MOMENT you finish — that releases the file lease so dependent work (and the reviewer) can proceed. Mark it "blocked" (with detail explaining why) if you are stuck.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -490,10 +859,57 @@ const TOOLS = {
         touchRoster(b);
         return b;
       });
-      return { ok: true, task: updated };
+      return { ok: true, task: publicTask(updated) };
     },
   },
 };
+
+/** Role-aware next-step hint, woven into orient results. */
+function hintFor(view) {
+  const role = view.you?.role || 'builder';
+  if (role === 'architect') {
+    if (view.openTasks === 0 && !view.goal) {
+      return 'You are the Architect. Read the repo enough to plan, then call forze_bus_plan ONCE with disjoint lanes (one per builder) and scoped tasks. Do not edit feature code.';
+    }
+    return 'Architect: the plan is laid down. Record key decisions with forze_bus_note, answer hand-offs via forze_bus_inbox, and integrate at the end. Avoid editing inside builders\' lanes.';
+  }
+  if (role === 'reviewer') {
+    return 'You are the Reviewer. Wait for builders to mark tasks done, then pull role:"reviewer" tasks with forze_bus_task_next, run the build + tests, integrate across lanes, and report issues via forze_bus_send.';
+  }
+  // builder
+  if (view.yourLane && (!view.yourLane.paths || view.yourLane.paths.length === 0)) {
+    return `Your lane "${view.you.lane}" has no paths yet — the Architect is still planning. Wait a few seconds and call forze_bus_sync again. Don't start editing until your lane is scoped.`;
+  }
+  if (view.nextUp) {
+    return `You are a Builder on lane "${view.you.lane}". Pull work with forze_bus_task_next and edit ONLY files in your lane. Next up: "${view.nextUp.title}".`;
+  }
+  return 'You are a Builder. Call forze_bus_task_next to pull your next lane task. If it returns null and the goal is met, announce you are done.';
+}
+
+/** When task_next finds nothing, work out why and return tailored guidance. */
+async function describeEmptyQueue() {
+  const bus = await readBus();
+  const role = selfRole || 'builder';
+  const lane = selfLane || null;
+  const open = bus.tasks.filter((t) => t.status !== 'done');
+  if (open.length === 0) {
+    if (!bus.goal && role !== 'architect') {
+      return { message: 'No tasks yet — the Architect has not posted the plan. Call forze_bus_sync shortly; if you ARE meant to plan, use forze_bus_plan.' };
+    }
+    return { message: 'The queue is empty and all tasks are done. If the goal is met, forze_bus_announce that you are finished; otherwise (architect) add the remaining work with forze_bus_plan / forze_bus_task_add.' };
+  }
+  // There IS open work but none for this caller — say why.
+  const mineByRole = open.filter((t) => roleAllows(role, lane, t));
+  if (mineByRole.length === 0) {
+    return { message: `There is open work, but none of it is ${role}${lane ? `/${lane}` : ''} work. Wait for hand-offs (forze_bus_inbox) or coordinate via forze_bus_send before taking another lane.` };
+  }
+  const blocked = mineByRole.find((t) => t.status === 'todo' && !t.owner && !depsSatisfied(bus, t));
+  if (blocked) {
+    const dep = pendingDep(bus, blocked);
+    return { message: `Your remaining task "${blocked.title}" is waiting on "${dep ? dep.title : 'a prerequisite'}". Help unblock it or wait — re-check with forze_bus_sync.` };
+  }
+  return { message: 'Your available tasks are all currently leased by overlapping in-flight work. Wait a moment and call forze_bus_task_next again, or coordinate via forze_bus_send.' };
+}
 
 // ---- MCP stdio JSON-RPC plumbing -----------------------------------------
 
@@ -556,7 +972,7 @@ async function dispatch(msg) {
       reply(id, {
         protocolVersion: params?.protocolVersion || PROTOCOL_VERSION,
         capabilities: { tools: {} },
-        serverInfo: { name: 'forze-context-bus', version: '1.2.0' },
+        serverInfo: { name: 'forze-crew-bus', version: '2.0.0' },
       });
       return;
     case 'notifications/initialized':
@@ -617,4 +1033,4 @@ mutateBus((b) => {
   return b;
 }).catch(() => undefined);
 
-console.error(`[forze-bus] online · station="${STATION}" · bus=${BUS_FILE}`);
+console.error(`[forze-bus] online · station="${STATION}" · role="${selfRole || 'builder'}" · lane="${selfLane || '-'}" · bus=${BUS_FILE}`);

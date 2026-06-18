@@ -164,6 +164,63 @@ async function main() {
   const emptyAdd = await claude.tool('forze_bus_task_add', { title: '   ' });
   check('Empty task title is rejected', emptyAdd.isError === true);
 
+  // --- Collision prevention: path leases (the whole point of the crew) -----
+  // Two scoped tasks over overlapping files. Once one is claimed, its files are
+  // leased — the overlapping task must NOT be handed to a second agent until the
+  // first is done. This is what stops two CLIs clobbering each other's work.
+  const tP = await claude.tool('forze_bus_task_add', { title: 'touch module A', scope: ['src/app'] });
+  const tQ = await claude.tool('forze_bus_task_add', { title: 'touch module A api', scope: ['src/app/api.ts'] });
+  const aGot = await claude.tool('forze_bus_task_next');
+  check('task_next claims the first scoped task', !!aGot.task && aGot.task.id === tP.task.id);
+  const bBlocked = await codex.tool('forze_bus_task_next');
+  check(
+    'Overlapping task is withheld while its files are leased (no collision)',
+    bBlocked.task === null || bBlocked.task.id !== tQ.task.id,
+  );
+  // Direct claim of the leased-overlapping task is refused with guidance.
+  const bClaim = await codex.tool('forze_bus_task_claim', { id: tQ.task.id });
+  check('Claiming a task that overlaps an in-flight lease is refused', bClaim.isError === true);
+  // Finish the first → its lease releases → the overlapping task is now claimable.
+  await claude.tool('forze_bus_task_update', { id: tP.task.id, status: 'done' });
+  const bNow = await codex.tool('forze_bus_task_next');
+  check('Lease releases on "done" — the overlapping task can now be pulled', !!bNow.task && bNow.task.id === tQ.task.id);
+  await codex.tool('forze_bus_task_update', { id: tQ.task.id, status: 'done' });
+
+  // --- Dependencies: a task waits for its prerequisite ---------------------
+  const depA = await claude.tool('forze_bus_task_add', { title: 'define schema', scope: ['db/schema.sql'] });
+  const depB = await claude.tool('forze_bus_task_add', {
+    title: 'use schema',
+    scope: ['src/queries.ts'],
+    dependsOn: [depA.task.id],
+  });
+  // depB depends on depA — task_next should hand out depA first, never depB.
+  const firstPull = await codex.tool('forze_bus_task_next');
+  check('Dependent task is not handed out before its prerequisite', !!firstPull.task && firstPull.task.id === depA.task.id);
+  const claimBlocked = await claude.tool('forze_bus_task_claim', { id: depB.task.id });
+  check('Claiming a task with an unfinished dependency is refused', claimBlocked.isError === true);
+  await codex.tool('forze_bus_task_update', { id: depA.task.id, status: 'done' });
+  const depBpull = await claude.tool('forze_bus_task_next');
+  check('Once the prerequisite is done, the dependent task is claimable', !!depBpull.task && depBpull.task.id === depB.task.id);
+
+  // --- forze_bus_plan: architect lays the whole plan in one call -----------
+  const planner = agent('Architect');
+  await planner.init();
+  const plan = await planner.tool('forze_bus_plan', {
+    goal: 'Ship the dashboard',
+    lanes: [
+      { name: 'lane-1', paths: ['src/ui'] },
+      { name: 'lane-2', paths: ['src/server'] },
+    ],
+    tasks: [
+      { title: 'build chart', scope: ['src/ui/Chart.tsx'], lane: 'lane-1', acceptance: 'renders' },
+      { title: 'wire endpoint', scope: ['src/server/api.ts'], lane: 'lane-2', dependsOn: ['build chart'] },
+    ],
+  });
+  check('forze_bus_plan records goal + lanes + tasks in one call', plan.ok === true && plan.tasksAdded === 2 && plan.lanes.length === 2);
+  const synced = await planner.tool('forze_bus_sync');
+  check('forze_bus_sync returns the goal it just set', synced.goal === 'Ship the dashboard');
+  planner.kill();
+
   // --- Concurrency: 100 simultaneous writes across 4 agents ---------------
   const fleet = ['Claude Code #1', 'Codex #1', 'OpenCode #1', 'Antigravity #1'].map(agent);
   await Promise.all(fleet.map((a) => a.init()));
@@ -179,7 +236,7 @@ async function main() {
   const final = JSON.parse(await fs.readFile(busFile, 'utf-8'));
   const survived = final.messages.filter((m) => /^burst-\d-\d+$/.test(m.text)).length;
   check('All 100 concurrent writes persisted (lock works)', survived === 100);
-  check('Bus file is still valid JSON', final.version === 1 && Array.isArray(final.messages));
+  check('Bus file is still valid JSON', final.version === 2 && Array.isArray(final.messages));
   let staleLock = false;
   try {
     await fs.stat(`${busFile}.lock`);

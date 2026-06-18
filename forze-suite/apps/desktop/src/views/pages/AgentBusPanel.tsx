@@ -19,6 +19,7 @@ import type { BusTask, BusTaskStatus } from '../../lib/agentBus';
 import { useMemo, useState } from 'react';
 import { useProject } from '../../workbench/projectStore';
 import { useAgentBus } from '../../workbench/agentBusStore';
+import { useVibeStations } from '../../workbench/vibeStationsStore';
 import { briefReadyStations, runOnAllStations, startTeamGoal } from '../../workbench/teamSync';
 import { IDE_STATION, type CliWiringResult } from '../../lib/agentBus';
 import { toast } from '../../shell/toast';
@@ -65,12 +66,15 @@ export default function AgentBusPanel(): JSX.Element {
         .map(([station, info]) => ({
           station,
           status: info.status ?? null,
+          role: info.role ?? null,
+          lane: info.lane ?? null,
           active: typeof info.lastSeen === 'number' && now - info.lastSeen < ACTIVE_WINDOW_MS,
         }))
         .sort((a, b) => a.station.localeCompare(b.station)),
     [bus.roster, now],
   );
   const activeCount = roster.filter((r) => r.active).length;
+  const lanes = useMemo(() => Object.entries(bus.lanes ?? {}), [bus.lanes]);
 
   const messages = useMemo(() => [...bus.messages].sort((a, b) => a.ts - b.ts).slice(-50), [bus.messages]);
   const notes = useMemo(
@@ -160,16 +164,32 @@ export default function AgentBusPanel(): JSX.Element {
     if (!root || !g || starting) return;
     setStarting(true);
     try {
-      const res = await startTeamGoal(root, g);
+      const vibe = useVibeStations.getState();
+      let assign: boolean;
+      if (vibe.stations.length === 0) {
+        // No stations yet → launch a default crew (architect + 2 builders + reviewer).
+        vibe.launchCrew({ architect: 'claude', builders: ['claude', 'claude'], reviewer: 'claude' }, root);
+        assign = false; // launchCrew already set the roles
+      } else {
+        // Assign roles only if the running grid isn't already a crew.
+        assign = !vibe.stations.some((s) => s.role === 'architect');
+      }
+      const res = await startTeamGoal(root, g, { assign });
       await refresh(root);
       setGoal('');
-      if (res.stationsRunning === 0) {
-        toast(`Split into ${res.tasks.length} tasks — launch a station and it'll pick them up`, 'success');
-      } else {
-        toast(`Split into ${res.tasks.length} tasks · ${res.briefed.length} agent(s) working it`, 'success');
-      }
+      const parts: string[] = [];
+      if (res.architect) parts.push(`architect ${res.architect}`);
+      if (res.builders) parts.push(`${res.builders} builder(s) · ${res.lanes.join(', ') || 'lanes'}`);
+      if (res.reviewer) parts.push(`reviewer ${res.reviewer}`);
+      const crewDesc = parts.join(' · ') || 'the crew';
+      toast(
+        res.stationsRunning === 0
+          ? `Crew set up (${crewDesc}) — stations are booting and will pick it up`
+          : `Crew on it: ${crewDesc}`,
+        'success',
+      );
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Could not start the team', 'error');
+      toast(err instanceof Error ? err.message : 'Could not start the crew', 'error');
     } finally {
       setStarting(false);
     }
@@ -203,10 +223,12 @@ export default function AgentBusPanel(): JSX.Element {
           {!enabled ? (
             <div className="bus-setup">
               <p className="bus-setup__lead">
-                Let your Vibe Station agents share context — a common board for
-                decisions and contracts, plus direct messages and hand-offs between
-                CLIs. Forze writes a tiny MCP server into <code>.forze/</code> and
-                wires Claude Code, Codex, OpenCode, and Antigravity to it.
+                Turn your Vibe Stations into a coordinated <b>crew</b> instead of
+                rival agents. An Architect plans + scopes the work into disjoint
+                file lanes, lane-locked Builders each own a slice (so they can&apos;t
+                overwrite each other), and a Reviewer integrates + tests. Forze writes
+                a tiny MCP server into <code>.forze/</code> and wires Claude Code,
+                Codex, OpenCode, and Antigravity to it.
               </p>
               <button
                 type="button"
@@ -221,7 +243,7 @@ export default function AgentBusPanel(): JSX.Element {
             </div>
           ) : (
             <>
-              {/* One-shot: describe a goal → split into tasks → team works it */}
+              {/* One-shot: describe a goal → crew self-organizes around it */}
               <div className="bus-goal">
                 <textarea
                   value={goal}
@@ -230,8 +252,8 @@ export default function AgentBusPanel(): JSX.Element {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void onStartGoal();
                   }}
                   rows={2}
-                  placeholder="Tell the team what to build, e.g. “Add email + password login with tests”…"
-                  aria-label="Team goal"
+                  placeholder="Tell the crew what to build, e.g. “Add email + password login with tests”…"
+                  aria-label="Crew goal"
                   className="bus-goal__input"
                 />
                 <button
@@ -240,13 +262,32 @@ export default function AgentBusPanel(): JSX.Element {
                   onClick={() => void onStartGoal()}
                   disabled={starting || !goal.trim() || !root}
                 >
-                  <Megaphone size={14} /> {starting ? 'Starting…' : 'Start team'}
+                  <Megaphone size={14} /> {starting ? 'Starting…' : 'Start crew'}
                 </button>
                 <p className="dim bus-goal__hint">
-                  Forze splits this into tasks, hands them to your running stations, and they
-                  claim and work them together — no further prompting.
+                  Forze assigns roles — an <b>Architect</b> plans + scopes the work into lanes, lane-locked{' '}
+                  <b>Builders</b> each own a slice of files (so they can&apos;t collide), and a{' '}
+                  <b>Reviewer</b> integrates + tests. No further prompting. Launches a default crew if none are running.
                 </p>
               </div>
+
+              {/* Lanes — the disjoint file areas the architect assigned */}
+              {lanes.length > 0 && (
+                <div className="bus-section">
+                  <div className="bus-section__label">Lanes</div>
+                  <div className="bus-lanes">
+                    {lanes.map(([name, lane]) => (
+                      <div key={name} className="bus-lane">
+                        <span className="bus-lane__name">{name}</span>
+                        {lane.owner && <span className="bus-lane__owner">{lane.owner}</span>}
+                        <span className="bus-lane__paths">
+                          {lane.paths && lane.paths.length ? lane.paths.join(', ') : '— not scoped yet'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Roster */}
               <div className="bus-section">
@@ -282,6 +323,11 @@ export default function AgentBusPanel(): JSX.Element {
                         >
                           <CircleDot size={11} />
                           <span className="bus-chip__name">{r.station}</span>
+                          {r.role && (
+                            <span className={`bus-chip__role is-${r.role}`}>
+                              {r.role === 'builder' && r.lane ? r.lane : r.role}
+                            </span>
+                          )}
                           {r.status && <span className="bus-chip__status">— {r.status}</span>}
                         </span>
                       ))}

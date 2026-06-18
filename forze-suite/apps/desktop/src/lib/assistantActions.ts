@@ -344,11 +344,12 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
     impact: 'confirm',
     usage:
       '"team_build" {goal: string, agent?: "claude"|"codex"|"antigravity"|"opencode", count?: number} — ' +
-      'have the REAL Vibe Station coding CLIs build something together, end to end. Opens Vibe Stations, ' +
-      'turns on the shared Context Bus, launches the agents if none are running, splits the goal into ' +
-      'tasks, and sets the team working on it autonomously. This is the main way to "have the agents do X" ' +
-      "— prefer it over run_agent_goal when the user means their CLI agents (Claude Code/Codex/etc.). " +
-      'Defaults to 2 Claude Code stations. Asks to confirm first.',
+      'have the REAL Vibe Station coding CLIs build something together as a CREW, end to end. Opens Vibe ' +
+      'Stations, turns on the shared Crew Bus, launches the agents if none are running, then assigns roles — ' +
+      'an Architect that plans + scopes the work into disjoint file lanes, lane-locked Builders that each own ' +
+      'a slice (so they never collide), and a Reviewer that integrates + tests — and sets them working ' +
+      'autonomously. This is the main way to "have the agents do X" — prefer it over run_agent_goal when the ' +
+      'user means their CLI agents (Claude Code/Codex/etc.). Defaults to a 3-station crew. Asks to confirm first.',
     describe: (args) => `Put the CLI team on: ${clip(str(args, 'goal', 'task', 'prompt', 'build'))}`,
     run: async (args) => {
       const goal = str(args, 'goal', 'task', 'prompt', 'build', 'objective');
@@ -356,7 +357,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       const root = useProject.getState().workspaceRoot;
       if (!root) return 'Open a project folder first, then I can put the team on it.';
       const agentId = parseStationLabel(str(args, 'agent', 'agents', 'cli', 'with') ?? '')?.agentId ?? 'claude';
-      const want = Math.max(1, Math.min(MAX_STATIONS, Math.round(Number(args.count) || 2)));
+      const want = Math.max(1, Math.min(MAX_STATIONS, Math.round(Number(args.count) || 3)));
 
       // Enable the bus BEFORE launching so new stations boot with their identity.
       if (!(await isBusEnabled(root))) await enableBusForWorkspace(root);
@@ -376,7 +377,12 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       const res = await startTeamGoal(root, goal);
       const label = agentDef(agentId).label;
       const launchNote = launched ? `, launched ${launched} new station(s)` : '';
-      return `On it — the ${label} team is set up: split into ${res.tasks.length} task(s)${launchNote}. They'll claim and work the queue as they boot. Watch them on the Vibe Stations page.`;
+      const roleParts: string[] = [];
+      if (res.architect) roleParts.push(`Architect ${res.architect}`);
+      if (res.builders) roleParts.push(`${res.builders} Builder(s)`);
+      if (res.reviewer) roleParts.push(`Reviewer ${res.reviewer}`);
+      const crew = roleParts.join(', ') || 'the crew';
+      return `On it — the ${label} crew is set up (${crew})${launchNote}. The Architect plans + scopes lanes, Builders work only their own files, the Reviewer integrates and tests. Watch them on the Vibe Stations page.`;
     },
   },
   {

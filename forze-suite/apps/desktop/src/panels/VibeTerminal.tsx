@@ -10,7 +10,7 @@ import {
   writePty,
 } from '../lib/pty';
 import { useTheme } from '../theme/themeStore';
-import { useVibeStations } from '../workbench/vibeStationsStore';
+import { useVibeStations, type StationRole } from '../workbench/vibeStationsStore';
 import { buildLaunchKeystroke, prepareStationLaunch } from '../lib/agentBus';
 import { createForzeTerminal, xtermThemeFor } from './terminalKit';
 
@@ -68,8 +68,8 @@ export default function VibeTerminal({
   cwd: string | null;
   launchCommand?: string;
   /** When the Context Bus is enabled, this station's bus identity. Drives
-   *  per-station MCP config + identity env injected at launch. */
-  busStation?: { root: string; agentId: string; label: string };
+   *  per-station MCP config + identity env (role/lane) injected at launch. */
+  busStation?: { root: string; agentId: string; label: string; role?: StationRole; lane?: string | null };
 }): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -238,7 +238,9 @@ async function initialiseTerminal(
   stationId: string,
   cwd: string | null,
   launchCommand: string | undefined,
-  getBusStation: () => { root: string; agentId: string; label: string } | undefined,
+  getBusStation: () =>
+    | { root: string; agentId: string; label: string; role?: StationRole; lane?: string | null }
+    | undefined,
   termRef: React.MutableRefObject<Terminal | null>,
   fitRef: React.MutableRefObject<FitAddon | null>,
   ptyIdRef: React.MutableRefObject<string | null>,
@@ -284,6 +286,8 @@ async function initialiseTerminal(
               busStation.agentId,
               busStation.label,
               launchCommand,
+              busStation.role,
+              busStation.lane,
             );
             keystroke = buildLaunchKeystroke(command, env);
           } catch {

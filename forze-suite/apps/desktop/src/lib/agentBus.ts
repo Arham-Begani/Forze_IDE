@@ -38,11 +38,19 @@ export interface BusBoardEntry {
   ts: number;
 }
 
+/** A station's role on the crew. Drives which tasks it may pull and how it's
+ *  briefed. Mirrors the role union in vibeStationsStore. */
+export type CrewRole = 'architect' | 'builder' | 'reviewer';
+
 export interface BusRosterEntry {
   lastSeen?: number;
   status?: string;
   statusAt?: number;
   lastRead?: number;
+  /** Declared role (from launch env or forze_bus_register). */
+  role?: CrewRole;
+  /** For builders: the lane they own. */
+  lane?: string;
 }
 
 export type BusTaskStatus = 'todo' | 'doing' | 'done' | 'blocked';
@@ -53,13 +61,34 @@ export interface BusTask {
   detail?: string;
   status: BusTaskStatus;
   owner?: string | null;
+  /** Files/dirs this task will touch — the unit of the path lease. */
+  scope?: string[];
+  /** Lane this task belongs to (routes it to that lane's builder). */
+  lane?: string | null;
+  /** Who should do it — 'builder' (default), 'reviewer', or 'architect'. */
+  role?: CrewRole;
+  /** Task ids that must be done before this one can start. */
+  dependsOn?: string[];
+  /** Done-criteria. */
+  acceptance?: string | null;
   createdBy?: string;
   createdAt?: number;
   updatedAt?: number;
 }
 
+/** A named work area: a disjoint set of paths owned by one builder. */
+export interface BusLane {
+  paths: string[];
+  desc?: string;
+  owner?: string | null;
+}
+
 export interface BusState {
   version: number;
+  /** The current team goal (was previously a board note). */
+  goal?: string | null;
+  /** Lane name → its paths + owner. Defined by the architect's plan. */
+  lanes: Record<string, BusLane>;
   messages: BusMessage[];
   board: Record<string, BusBoardEntry>;
   roster: Record<string, BusRosterEntry>;
@@ -70,7 +99,7 @@ export interface BusState {
 export const IDE_STATION = 'Forze IDE';
 
 export function emptyBus(): BusState {
-  return { version: 1, messages: [], board: {}, roster: {}, tasks: [] };
+  return { version: 2, goal: null, lanes: {}, messages: [], board: {}, roster: {}, tasks: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +123,9 @@ export function busServerPath(root: string): string {
 function normalizeBus(parsed: unknown): BusState {
   const p = (parsed ?? {}) as Partial<BusState>;
   return {
-    version: 1,
+    version: 2,
+    goal: typeof p.goal === 'string' ? p.goal : null,
+    lanes: p.lanes && typeof p.lanes === 'object' ? (p.lanes as Record<string, BusLane>) : {},
     messages: Array.isArray(p.messages) ? (p.messages as BusMessage[]) : [],
     board: p.board && typeof p.board === 'object' ? (p.board as Record<string, BusBoardEntry>) : {},
     roster: p.roster && typeof p.roster === 'object' ? (p.roster as Record<string, BusRosterEntry>) : {},
@@ -192,6 +223,34 @@ export async function setNoteFromIde(root: string, key: string, value: string): 
   });
 }
 
+/** Set the team goal from the IDE (kicks off a crew run). */
+export async function setGoalFromIde(root: string, goal: string): Promise<void> {
+  const g = goal.trim();
+  await mutateBus(root, (b) => {
+    b.goal = g.slice(0, 2000) || null;
+  });
+}
+
+/** Define (or reset) a lane the IDE pre-creates so builders can claim it before
+ *  the architect has filled in its paths. Preserves an existing owner. */
+export async function defineLaneFromIde(
+  root: string,
+  name: string,
+  paths: string[] = [],
+  desc = '',
+): Promise<void> {
+  const n = name.trim().slice(0, 80);
+  if (!n) return;
+  await mutateBus(root, (b) => {
+    const prev = b.lanes[n];
+    b.lanes[n] = {
+      paths: paths.map((p) => p.trim()).filter(Boolean).slice(0, 64),
+      desc: desc.trim().slice(0, 400) || prev?.desc || '',
+      owner: prev?.owner ?? null,
+    };
+  });
+}
+
 /** Remove a board note. */
 export async function deleteNote(root: string, key: string): Promise<void> {
   await mutateBus(root, (b) => {
@@ -201,8 +260,22 @@ export async function deleteNote(root: string, key: string): Promise<void> {
 
 // ---- tasks (IDE side) -----------------------------------------------------
 
+/** Optional crew metadata when the IDE seeds a task (scope/lane/role/etc.). */
+export interface IdeTaskOpts {
+  scope?: string[];
+  lane?: string | null;
+  role?: CrewRole;
+  acceptance?: string | null;
+  dependsOn?: string[];
+}
+
 /** Add a task to the shared queue from the IDE. */
-export async function addTaskFromIde(root: string, title: string, detail = ''): Promise<void> {
+export async function addTaskFromIde(
+  root: string,
+  title: string,
+  detail = '',
+  opts: IdeTaskOpts = {},
+): Promise<void> {
   const t = title.trim();
   if (!t) return;
   await mutateBus(root, (b) => {
@@ -212,6 +285,11 @@ export async function addTaskFromIde(root: string, title: string, detail = ''): 
       detail: detail.trim().slice(0, 4000),
       status: 'todo',
       owner: null,
+      scope: (opts.scope ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 64),
+      lane: opts.lane ?? null,
+      role: opts.role ?? 'builder',
+      acceptance: opts.acceptance ?? null,
+      dependsOn: opts.dependsOn ?? [],
       createdBy: IDE_STATION,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -248,12 +326,21 @@ function psQuote(value: string): string {
 
 /**
  * Build the env map a station's CLI is launched with so the bus server (its
- * stdio child) inherits a distinct identity and the right bus file.
+ * stdio child) inherits a distinct identity, role, lane, and the right bus
+ * file. Role/lane are only included when set (the architect/reviewer have no
+ * lane; a retrofitted station may have no role until it registers).
  */
-export function stationLaunchEnv(root: string, stationLabel: string): Record<string, string> {
+export function stationLaunchEnv(
+  root: string,
+  stationLabel: string,
+  role?: CrewRole,
+  lane?: string | null,
+): Record<string, string> {
   return {
     FORZE_STATION: stationLabel,
     FORZE_BUS_FILE: busFilePath(root),
+    ...(role ? { FORZE_ROLE: role } : {}),
+    ...(lane ? { FORZE_LANE: lane } : {}),
   };
 }
 
@@ -286,8 +373,10 @@ export async function prepareStationLaunch(
   _agentId: string,
   label: string,
   baseCommand: string,
+  role?: CrewRole,
+  lane?: string | null,
 ): Promise<{ command: string; env: Record<string, string> }> {
-  return { command: baseCommand, env: stationLaunchEnv(root, label) };
+  return { command: baseCommand, env: stationLaunchEnv(root, label, role, lane) };
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +460,8 @@ async function wireClaude(root: string, serverPath: string, busFile: string): Pr
       env: {
         // Expanded by Claude Code from its own env (set by the launch keystroke).
         FORZE_STATION: '${FORZE_STATION:-unknown-agent}',
+        FORZE_ROLE: '${FORZE_ROLE:-builder}',
+        FORZE_LANE: '${FORZE_LANE:-}',
         FORZE_BUS_FILE: busFile,
       },
     };
@@ -465,12 +556,12 @@ async function wireCodex(serverPath: string, busFile: string): Promise<CliWiring
     `\n${header}\n` +
     `command = "node"\n` +
     `args = ['${serverPath}']\n` +
-    `env_vars = ["FORZE_STATION"]\n` +
+    `env_vars = ["FORZE_STATION", "FORZE_ROLE", "FORZE_LANE"]\n` +
     `env = { FORZE_BUS_FILE = '${busFile}' }\n`;
   try {
     const current = await readFile(configPath).catch(() => '');
     const hasBlock = current.includes(header);
-    const upToDate = hasBlock && current.includes('env_vars') && current.includes('FORZE_STATION');
+    const upToDate = hasBlock && current.includes('FORZE_ROLE') && current.includes('FORZE_STATION');
     if (upToDate) {
       return {
         cli: 'codex',
