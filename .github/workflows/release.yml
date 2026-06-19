@@ -55,10 +55,44 @@ jobs:
       - name: Install workspace deps
         run: pnpm install --frozen-lockfile
 
-      - name: Build (signed)
+      # Windows Authenticode signing (Azure Trusted Signing) only engages when the
+      # service-principal secret is present. Until you provision Azure + add the
+      # secrets, this resolves to an empty arg and the build is byte-for-byte what
+      # it is today (unsigned) — so adding this step can never break a release.
+      - name: Resolve Authenticode signing (Windows)
+        id: codesign
+        shell: bash
+        env:
+          HAS_AZURE: ${{ secrets.AZURE_CLIENT_ID != '' }}
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ] && [ "$HAS_AZURE" = "true" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "config=--config src-tauri/tauri.signing.conf.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "config=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # signCommand in tauri.signing.conf.json shells out to this during bundling,
+      # so BOTH the app .exe and the installer get Authenticode-signed.
+      - name: Install Trusted Signing CLI
+        if: steps.codesign.outputs.enabled == 'true'
+        run: cargo install trusted-signing-cli --locked
+
+      # Two unrelated signatures happen here — do not confuse them:
+      #   • TAURI_SIGNING_*  → minisign keys that sign the auto-UPDATER manifest
+      #     so the updater can verify downloads. This does NOTHING for SmartScreen.
+      #   • AZURE_* + codesign.config → Windows AUTHENTICODE signing via Azure
+      #     Trusted Signing. THIS is what removes the SmartScreen warning.
+      - name: Build + sign
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Authenticode signing via Azure Trusted Signing (read by trusted-signing-cli
+          # through the Azure DefaultAzureCredential chain). Unset → signing is skipped.
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           # Build-time (Vite inlines these into the bundle). Without them the
           # released app shows "Forze account isn't configured for this build".
           # The anon key is meant to ship in the binary — RLS is the boundary.
@@ -68,7 +102,7 @@ jobs:
           VITE_FORZE_GEMINI_KEY: ${{ secrets.VITE_FORZE_GEMINI_KEY }}
           VITE_FORZE_VERCEL_TOKEN: ${{ secrets.VITE_FORZE_VERCEL_TOKEN }}
           VITE_FORZE_VERCEL_TEAM_ID: ${{ secrets.VITE_FORZE_VERCEL_TEAM_ID }}
-        run: pnpm --filter @forze/desktop exec tauri build ${{ matrix.args }}
+        run: pnpm --filter @forze/desktop exec tauri build ${{ matrix.args }} ${{ steps.codesign.outputs.config }}
 
       - uses: actions/upload-artifact@v4
         with:

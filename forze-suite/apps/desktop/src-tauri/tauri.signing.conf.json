@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/tauri.json",
+  "bundle": {
+    "windows": {
+      "signCommand": {
+        "cmd": "trusted-signing-cli",
+        "args": [
+          "-e",
+          "https://eus.codesigning.azure.net",
+          "-a",
+          "REPLACE_WITH_TRUSTED_SIGNING_ACCOUNT",
+          "-c",
+          "REPLACE_WITH_CERTIFICATE_PROFILE",
+          "%1"
+        ]
+      }
+    }
+  }
+}
