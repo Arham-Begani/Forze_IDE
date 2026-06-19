@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
+  AppWindow,
   Boxes,
   Files,
   GitBranch,
@@ -41,6 +42,7 @@ const VibeStationsPage = lazy(() => import('../views/pages/VibeStationsPage'));
 const CommunityPage = lazy(() => import('../views/pages/CommunityPage'));
 const TeamPage = lazy(() => import('../views/pages/TeamPage'));
 const KanbanPage = lazy(() => import('../views/pages/KanbanPage'));
+const PreviewPage = lazy(() => import('../views/pages/PreviewPage'));
 
 export interface PanelContext {
   onInsertCode: (snippet: string) => void;
@@ -72,6 +74,7 @@ export const PANELS: Record<ActivityId, PanelDef> = {
   'vibe-stations': { id: 'vibe-stations', title: 'Vibe Stations', icon: SquareTerminal, group: 'skill', render: () => <VibeStationsPage /> },
   community: { id: 'community', title: 'Community', icon: MessagesSquare, group: 'skill', render: () => <CommunityPage /> },
   team: { id: 'team', title: 'Team', icon: Users, group: 'skill', render: () => <TeamPage /> },
+  preview: { id: 'preview', title: 'Live Preview', icon: AppWindow, group: 'skill', render: () => <PreviewPage /> },
 
   // The shared team board gets its own home in the rail, just below Apps.
   kanban: { id: 'kanban', title: 'Kanban', icon: SquareKanban, group: 'board', render: () => <KanbanPage /> },
@@ -81,3 +84,6 @@ export const CORE_PANELS = Object.values(PANELS).filter((p) => p.group === 'core
 export const SKILL_PANELS = Object.values(PANELS).filter((p) => p.group === 'skill');
 /** The shared board — surfaced as its own rail entry below the Apps launcher. */
 export const BOARD_PANEL = PANELS.kanban;
+/** Live Preview — also gets a dedicated rail entry for one-click access, since
+ *  it's a high-frequency dev tool (it still appears in the Apps launcher too). */
+export const PREVIEW_PANEL = PANELS.preview;

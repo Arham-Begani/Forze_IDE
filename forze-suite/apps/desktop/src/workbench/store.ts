@@ -18,7 +18,8 @@ export type ActivityId =
   | 'vibe-stations'
   | 'community'
   | 'team'
-  | 'kanban';
+  | 'kanban'
+  | 'preview';
 
 /** Every activity id the app currently ships. The single source of truth used
  *  to sanitize persisted state — a removed or renamed panel (e.g. the retired
@@ -40,6 +41,7 @@ export const ALL_ACTIVITY_IDS: readonly ActivityId[] = [
   'community',
   'team',
   'kanban',
+  'preview',
 ];
 
 const KNOWN_ACTIVITY = new Set<string>(ALL_ACTIVITY_IDS);
@@ -78,6 +80,7 @@ export const PAGE_TITLES: Partial<Record<ActivityId, string>> = {
   community: 'Community',
   team: 'Team',
   kanban: 'Kanban',
+  preview: 'Live Preview',
 };
 
 export type BottomPanelTab = 'terminal' | 'problems' | 'output';

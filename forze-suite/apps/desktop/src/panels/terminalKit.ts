@@ -2,6 +2,7 @@ import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { CanvasAddon } from '@xterm/addon-canvas';
+import { openLink } from '../lib/openLink';
 
 /**
  * Shared xterm wiring for every terminal in the app (the bottom-panel
@@ -134,7 +135,15 @@ export function createForzeTerminal(
 
   const fit = new FitAddon();
   term.loadAddon(fit);
-  term.loadAddon(new WebLinksAddon());
+  // The web-links addon already linkifies http(s) URLs in the output (so a dev
+  // server printing "Local: http://localhost:5173/" is clickable). Override the
+  // default window.open handler so localhost URLs open in the in-IDE Live
+  // Preview pane and everything else goes to the OS browser.
+  term.loadAddon(
+    new WebLinksAddon((_event, uri) => {
+      void openLink(uri);
+    }),
+  );
 
   // Ctrl+L / Cmd+K: clear the screen, shell-agnostic. xterm's own clear wipes
   // the scrollback and keeps the current prompt line, so it works the same

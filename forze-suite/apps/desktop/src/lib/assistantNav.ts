@@ -80,6 +80,12 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     blurb: 'The shared drag-and-drop task board the whole team can see and move.',
     run: () => wb().openPage('kanban'),
   },
+  {
+    id: 'preview',
+    label: 'Live Preview',
+    blurb: 'See the running app — an embedded browser pointed at your local dev server (localhost). Use it for "show my app", "open the preview", "see localhost".',
+    run: () => wb().openPage('preview'),
+  },
   // Core IDE views (open in the left sidebar)
   {
     id: 'explorer',

@@ -1,7 +1,7 @@
 import { LayoutGrid } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useWorkbench } from '../workbench/store';
-import { BOARD_PANEL, CORE_PANELS, SKILL_PANELS } from '../workbench/panels';
+import { BOARD_PANEL, CORE_PANELS, PREVIEW_PANEL, SKILL_PANELS } from '../workbench/panels';
 import { changeCount, useGitStatus, useGitStatusPolling } from '../workbench/gitStatusStore';
 
 export default function ActivityBar(): JSX.Element {
@@ -86,6 +86,19 @@ export default function ActivityBar(): JSX.Element {
       >
         <BOARD_PANEL.icon size={17} strokeWidth={1.6} />
         <span className="rail__tooltip">{BOARD_PANEL.title}</span>
+      </button>
+
+      {/* Live Preview — embedded localhost browser, one click from the rail. */}
+      <button
+        type="button"
+        className={`rail__item ${activePageId === PREVIEW_PANEL.id ? 'is-active' : ''}`}
+        onClick={() => openPage(PREVIEW_PANEL.id)}
+        aria-label={PREVIEW_PANEL.title}
+        aria-current={activePageId === PREVIEW_PANEL.id ? 'page' : undefined}
+        tabIndex={0}
+      >
+        <PREVIEW_PANEL.icon size={17} strokeWidth={1.6} />
+        <span className="rail__tooltip">{PREVIEW_PANEL.title}</span>
       </button>
 
       <div className="rail__spacer" />
