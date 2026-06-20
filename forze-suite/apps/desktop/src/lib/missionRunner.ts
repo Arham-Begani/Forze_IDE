@@ -45,6 +45,53 @@ export function abortAllAgents(): void {
   controllers.forEach((c) => c.abort());
 }
 
+/**
+ * Coalesce a worker's streamed deltas into at most one store write per frame.
+ *
+ * Writing the store on *every* token is what crashed the webview: each write
+ * re-renders the whole roster + mission graph AND makes the persist middleware
+ * partialize and JSON.stringify the entire roster — the debounced storage only
+ * defers the `localStorage.setItem`, not that synchronous serialization. With
+ * several agents streaming at once that serialize-storm starves the main thread
+ * until the renderer is killed. Buffering deltas behind a short timer collapses
+ * dozens of tokens into a single update while keeping output visibly live.
+ */
+function makeDeltaFlusher(agentId: string, intervalMs = 64) {
+  let buffer = '';
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const write = () => {
+    timer = null;
+    if (!buffer) return;
+    const chunk = buffer;
+    buffer = '';
+    useAgentManager.getState().appendAgentOutput(agentId, chunk);
+  };
+
+  return {
+    /** Queue a delta; a trailing flush lands within `intervalMs`. */
+    push(delta: string) {
+      buffer += delta;
+      if (timer === null) timer = setTimeout(write, intervalMs);
+    },
+    /** Force any buffered text out now (call before reading final output). */
+    flush() {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      write();
+    },
+    /** Drop the pending timer without writing (cleanup after a flush). */
+    cancel() {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    },
+  };
+}
+
 /** The default model to use when a caller doesn't pin one. */
 function defaultModel(): string | undefined {
   return activeProvider()?.models[0]?.id;
@@ -76,6 +123,10 @@ export async function runAgentById(
   }
   m.setAgentStatus(agentId, 'thinking');
 
+  // Batch streamed tokens so they don't write the store (and re-serialize the
+  // whole roster) on every delta — see makeDeltaFlusher.
+  const flusher = makeDeltaFlusher(agentId);
+
   try {
     // Stream via onDelta, but keep the returned summary: some providers can
     // finish with no streamed text (empty/blocked candidates), which would
@@ -91,9 +142,10 @@ export async function runAgentById(
       },
       {
         signal: controller.signal,
-        onDelta: (delta) => useAgentManager.getState().appendAgentOutput(agentId, delta),
+        onDelta: (delta) => flusher.push(delta),
       },
     );
+    flusher.flush(); // land everything before we read the final output
     const streamed =
       useAgentManager.getState().agents.find((a) => a.id === agentId)?.output ?? '';
     if (!streamed.trim()) {
@@ -101,6 +153,7 @@ export async function runAgentById(
     }
     useAgentManager.getState().setAgentStatus(agentId, 'done');
   } catch (err) {
+    flusher.flush(); // don't lose partial output on abort/error
     if ((err as Error).name === 'AbortError') {
       useAgentManager.getState().setAgentStatus(agentId, 'stopped');
     } else {
@@ -109,6 +162,7 @@ export async function runAgentById(
       toast(message, 'error');
     }
   } finally {
+    flusher.cancel();
     controllers.delete(agentId);
   }
 }

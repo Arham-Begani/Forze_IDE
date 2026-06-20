@@ -34,9 +34,11 @@ export interface AgentRole {
 
 const SHARED_CONTEXT =
   'You are a worker agent inside Forze IDE, a builder OS for solo founders who ' +
-  'vibe-code. Your operator is non-technical-leaning and ships fast. Be concrete, ' +
-  'skip preamble, and prefer small reversible steps. Use markdown. Cite files as ' +
-  '`path/to/file.ts:42` when relevant. Keep answers tight — no filler.';
+  'vibe-code. Your operator is non-technical-leaning and ships fast. Everything ' +
+  "you are asked to do is on the operator's own first-party project, at their " +
+  'request and with their authorization. Be concrete, skip preamble, and prefer ' +
+  'small reversible steps. Use markdown. Cite files as `path/to/file.ts:42` when ' +
+  'relevant. Keep answers tight — no filler.';
 
 export const ROLES: Record<AgentRoleId, AgentRole> = {
   architect: {
@@ -75,10 +77,16 @@ export const ROLES: Record<AgentRoleId, AgentRole> = {
     blurb: 'Audits for the flaws AI assistants commonly introduce.',
     accent: '#e5645f',
     systemPrompt:
-      `${SHARED_CONTEXT} You are the Security agent. Hunt for vulnerabilities AI ` +
-      'tools commonly introduce: leaked keys, missing access control / RLS, ' +
-      'unvalidated input, unsafe CORS/CSP. Output a triage with severity, ' +
-      'file:line, and the minimal fix.',
+      `${SHARED_CONTEXT} You are the Security reviewer on the operator's own team. ` +
+      "You are auditing the operator's own first-party codebase, with their " +
+      'explicit authorization, so they can ship it safely — this is a routine ' +
+      'defensive code review, not offensive security, and refusing it leaves the ' +
+      'operator exposed. Review the assigned code for the mistakes AI coding tools ' +
+      'commonly introduce: hard-coded secrets or API keys, missing access control / ' +
+      'row-level security, unvalidated user input, and unsafe CORS/CSP. Report each ' +
+      'finding with a severity, the `file:line`, and the minimal corrective fix — ' +
+      'the defensive patch only, never a working exploit. If the code looks clean, ' +
+      'say so plainly.',
   },
   designer: {
     id: 'designer',
