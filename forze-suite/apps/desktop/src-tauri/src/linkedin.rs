@@ -43,10 +43,24 @@ struct TokenResponse {
     refresh_token_expires_in: Option<u64>,
 }
 
-/// Read a build-time config var: the real process env wins, otherwise we parse
-/// the desktop app's gitignored `.env` (the same file Vite reads). Checks a few
-/// candidate locations because the Tauri process cwd differs between
-/// `tauri dev` (src-tauri) and a packaged build.
+/// Credentials baked into the binary at compile time by `build.rs` (from CI env
+/// or the local `.env`). This is the only source that survives in a packaged
+/// build, where there is no process env and the gitignored `.env` isn't shipped.
+fn baked_var(key: &str) -> Option<&'static str> {
+    match key {
+        "LINKEDIN_CLIENT_ID" => option_env!("LINKEDIN_CLIENT_ID"),
+        "LINKEDIN_CLIENT_SECRET" => option_env!("LINKEDIN_CLIENT_SECRET"),
+        _ => None,
+    }
+    .map(str::trim)
+    .filter(|v| !v.is_empty())
+}
+
+/// Read a build-time config var. Order: the real process env, then the desktop
+/// app's gitignored `.env` (the same file Vite reads; a few candidate paths
+/// because the Tauri cwd differs between `tauri dev` and a packaged build), then
+/// the value `build.rs` baked into the binary — the last is what makes a packaged
+/// release work, since it carries no `.env` on disk.
 fn config_var(key: &str) -> Option<String> {
     if let Ok(v) = std::env::var(key) {
         let v = v.trim().to_string();
@@ -79,7 +93,7 @@ fn config_var(key: &str) -> Option<String> {
             }
         }
     }
-    None
+    baked_var(key).map(str::to_string)
 }
 
 /// True when the LinkedIn client id + secret are configured.

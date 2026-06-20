@@ -102,6 +102,11 @@ jobs:
           VITE_FORZE_GEMINI_KEY: ${{ secrets.VITE_FORZE_GEMINI_KEY }}
           VITE_FORZE_VERCEL_TOKEN: ${{ secrets.VITE_FORZE_VERCEL_TOKEN }}
           VITE_FORZE_VERCEL_TEAM_ID: ${{ secrets.VITE_FORZE_VERCEL_TEAM_ID }}
+          # "Connect LinkedIn" in Build in Public. Baked into the Rust binary by
+          # build.rs (NOT the webview) so the client secret can do the token
+          # exchange. Unset → the app just reports LinkedIn as unconfigured.
+          LINKEDIN_CLIENT_ID: ${{ secrets.LINKEDIN_CLIENT_ID }}
+          LINKEDIN_CLIENT_SECRET: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
         run: pnpm --filter @forze/desktop exec tauri build ${{ matrix.args }} ${{ steps.codesign.outputs.config }}
 
       - uses: actions/upload-artifact@v4
