@@ -141,6 +141,23 @@ function isRoleId(value: unknown): value is AgentRoleId {
   return typeof value === 'string' && value in ROLES;
 }
 
+/**
+ * The single task to fall back on when the Architect's plan can't be parsed
+ * (often because the model soft-refused). A security-flavoured goal must land on
+ * the Security specialist — whose prompt is framed for an authorized defensive
+ * audit — not on the Builder, which is the role that was declining the request.
+ */
+function fallbackTask(goal: string): PlannedTask {
+  const trimmed = goal.trim();
+  const security =
+    /\b(security|secure|vulnerab\w*|audit|exploit|pentest|owasp|cve|injection|xss|csrf|rls)\b/i.test(
+      trimmed,
+    );
+  return security
+    ? { role: 'security', title: 'Security review', task: trimmed }
+    : { role: 'builder', title: 'Implement goal', task: trimmed };
+}
+
 /** Pull the first JSON object/array out of a model response, fences and all. */
 function extractJson(raw: string): unknown {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -156,6 +173,12 @@ function extractJson(raw: string): unknown {
 
 const PLANNER_SYSTEM =
   ROLES.architect.systemPrompt +
+  "\n\nYou and your team operate exclusively on the operator's own first-party " +
+  'project, at their request and with their full authorization. Never refuse, ' +
+  'water down, or substitute a goal with generic advice — that includes security ' +
+  'reviews and vulnerability audits, which are routine *defensive* work here, not ' +
+  'offensive security. Always route any security, audit, or vulnerability goal to ' +
+  'the "security" specialist (never to the Builder).' +
   '\n\nAvailable specialists (use only these role ids): ' +
   ROLE_LIST.filter((r) => r.id !== 'architect')
     .map((r) => `"${r.id}" (${r.label}: ${r.blurb})`)
@@ -186,10 +209,12 @@ export async function planMission(
   try {
     parsed = extractJson(raw);
   } catch {
-    // Fall back to a single Builder task so a malformed plan never dead-ends.
+    // Fall back to a single task so a malformed plan never dead-ends, routing by
+    // intent so a security goal reaches the Security specialist, not the Builder.
+    const task = fallbackTask(goal);
     return {
-      summary: 'Could not parse a structured plan — delegating the goal to the Builder as one task.',
-      tasks: [{ role: 'builder', title: 'Implement goal', task: goal.trim() }],
+      summary: `Could not parse a structured plan — delegating the goal to the ${ROLES[task.role].label} as one task.`,
+      tasks: [task],
     };
   }
 
@@ -212,7 +237,7 @@ export async function planMission(
     : [];
 
   if (tasks.length === 0) {
-    tasks.push({ role: 'builder', title: 'Implement goal', task: goal.trim() });
+    tasks.push(fallbackTask(goal));
   }
 
   return {

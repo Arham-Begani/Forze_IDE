@@ -8,6 +8,24 @@ export const models: ProviderModel[] = [
 ];
 
 /**
+ * Forze is a builder OS: legitimate work routinely trips Gemini's default safety
+ * filters — most notably *security reviews and vulnerability audits of the
+ * operator's own code*, which come back blocked (finishReason=SAFETY) or soft-
+ * refused ("Sorry, I can't analyze this codebase…"). Scary-looking stack traces
+ * and edgy marketing copy hit the same walls. Every request runs against the
+ * operator's own first-party project with their authorization, so we turn the
+ * category filters off and rely on the model's own judgement. CIVIC_INTEGRITY is
+ * deliberately omitted — not every model accepts it, and including an unknown
+ * category 400s the whole request.
+ */
+const SAFETY_SETTINGS = [
+  'HARM_CATEGORY_HARASSMENT',
+  'HARM_CATEGORY_HATE_SPEECH',
+  'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+  'HARM_CATEGORY_DANGEROUS_CONTENT',
+].map((category) => ({ category, threshold: 'BLOCK_NONE' }));
+
+/**
  * Streaming generation against generativelanguage.googleapis.com.
  *
  * Implementation notes:
@@ -40,6 +58,7 @@ export async function* generate(
   const maxOutputTokens = Math.max(options.maxTokens ?? 2048, 8192);
   const body: Record<string, unknown> = {
     contents,
+    safetySettings: SAFETY_SETTINGS,
     generationConfig: {
       maxOutputTokens,
       thinkingConfig: { thinkingLevel: 'low' },
@@ -184,6 +203,7 @@ export async function generateVision(options: VisionOptions): Promise<string> {
         ],
       },
     ],
+    safetySettings: SAFETY_SETTINGS,
     // Gemini 3.x Pro is a *thinking* model: reasoning tokens are billed against
     // maxOutputTokens. With a tight cap and default thinking, the model can burn
     // the whole budget reasoning and return a 200 with finishReason=MAX_TOKENS
