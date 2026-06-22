@@ -7,6 +7,7 @@
  */
 import { aiReady, generateText } from './ai';
 import { collectDeployFiles, joinPath, readFile, writeFile } from './fs';
+import { pendoTrack } from './pendoTrack';
 import {
   getDeployment,
   getDeploymentLogs,
@@ -187,11 +188,29 @@ export async function deployWithAutoFix(opts: {
 
     if (state === 'READY') {
       onLog('Build succeeded ✓');
-      return { url, state, attempts: attempt, fixes };
+      const result = { url, state, attempts: attempt, fixes };
+      pendoTrack('folder_deploy_completed', {
+        final_state: result.state,
+        attempts: result.attempts,
+        auto_fix_enabled: opts.autoFix,
+        files_fixed_count: result.fixes.reduce((n, f) => n + f.length, 0),
+        project_name: opts.name,
+        deploy_url: result.url,
+      });
+      return result;
     }
     if (state !== 'ERROR') {
       onLog(`Build ${state.toLowerCase()}.`);
-      return { url, state, attempts: attempt, fixes };
+      const result = { url, state, attempts: attempt, fixes };
+      pendoTrack('folder_deploy_completed', {
+        final_state: result.state,
+        attempts: result.attempts,
+        auto_fix_enabled: opts.autoFix,
+        files_fixed_count: result.fixes.reduce((n, f) => n + f.length, 0),
+        project_name: opts.name,
+        deploy_url: result.url,
+      });
+      return result;
     }
 
     // Build failed — pull logs.
@@ -205,14 +224,43 @@ export async function deployWithAutoFix(opts: {
     const tail = errorTail(logs, 1500);
     if (tail) onLog(`Build error:\n${tail}`);
 
-    if (!opts.autoFix) return { url, state, attempts: attempt, fixes };
+    if (!opts.autoFix) {
+      const result = { url, state, attempts: attempt, fixes };
+      pendoTrack('folder_deploy_completed', {
+        final_state: result.state,
+        attempts: result.attempts,
+        auto_fix_enabled: false,
+        files_fixed_count: 0,
+        project_name: opts.name,
+        deploy_url: result.url,
+      });
+      return result;
+    }
     if (attempt === maxAttempts) {
       onLog('Out of auto-fix attempts.');
-      return { url, state, attempts: attempt, fixes };
+      const result = { url, state, attempts: attempt, fixes };
+      pendoTrack('folder_deploy_completed', {
+        final_state: result.state,
+        attempts: result.attempts,
+        auto_fix_enabled: opts.autoFix,
+        files_fixed_count: result.fixes.reduce((n, f) => n + f.length, 0),
+        project_name: opts.name,
+        deploy_url: result.url,
+      });
+      return result;
     }
     if (!aiReady()) {
       onLog('No AI model connected — add a key in Settings to enable auto-fix.');
-      return { url, state, attempts: attempt, fixes };
+      const result = { url, state, attempts: attempt, fixes };
+      pendoTrack('folder_deploy_completed', {
+        final_state: result.state,
+        attempts: result.attempts,
+        auto_fix_enabled: opts.autoFix,
+        files_fixed_count: 0,
+        project_name: opts.name,
+        deploy_url: result.url,
+      });
+      return result;
     }
 
     onPhase('Analyzing & fixing…');
@@ -222,17 +270,44 @@ export async function deployWithAutoFix(opts: {
       fix = await attemptAutoFix(opts.root, logs, paths, onLog);
     } catch (err) {
       onLog(`Auto-fix failed: ${err instanceof Error ? err.message : err}`);
-      return { url, state, attempts: attempt, fixes };
+      const result = { url, state, attempts: attempt, fixes };
+      pendoTrack('folder_deploy_completed', {
+        final_state: result.state,
+        attempts: result.attempts,
+        auto_fix_enabled: opts.autoFix,
+        files_fixed_count: result.fixes.reduce((n, f) => n + f.length, 0),
+        project_name: opts.name,
+        deploy_url: result.url,
+      });
+      return result;
     }
     fixes.push(fix.changed);
     if (fix.changed.length === 0) {
       onLog('AI proposed no file changes — stopping.');
-      return { url, state, attempts: attempt, fixes };
+      const result = { url, state, attempts: attempt, fixes };
+      pendoTrack('folder_deploy_completed', {
+        final_state: result.state,
+        attempts: result.attempts,
+        auto_fix_enabled: opts.autoFix,
+        files_fixed_count: 0,
+        project_name: opts.name,
+        deploy_url: result.url,
+      });
+      return result;
     }
     onLog(
       `${fix.explanation ? fix.explanation + ' ' : ''}Patched: ${fix.changed.join(', ')}. Redeploying…`,
     );
   }
 
-  return { url: lastUrl, state: 'ERROR', attempts: maxAttempts, fixes };
+  const finalResult: HealResult = { url: lastUrl, state: 'ERROR', attempts: maxAttempts, fixes };
+  pendoTrack('folder_deploy_completed', {
+    final_state: finalResult.state,
+    attempts: finalResult.attempts,
+    auto_fix_enabled: opts.autoFix,
+    files_fixed_count: finalResult.fixes.reduce((n, f) => n + f.length, 0),
+    project_name: opts.name,
+    deploy_url: finalResult.url,
+  });
+  return finalResult;
 }

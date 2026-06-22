@@ -11,6 +11,7 @@ import {
   useVibeStations,
   type StationTarget,
 } from '../../workbench/vibeStationsStore';
+import { pendoTrack } from '../../lib/pendoTrack';
 import { toast } from '../../shell/toast';
 
 const STATUS_LABEL: Record<ScheduledPromptStatus, string> = {
@@ -101,6 +102,12 @@ export default function ScheduledPromptsPanel(): JSX.Element {
     schedule(chosen.target, text, ms);
     setPrompt('');
     setWhen('');
+    pendoTrack('prompt_scheduled', {
+      target_agent_id: chosen.target.agentId,
+      target_label: chosen.label.replace(' (not open)', ''),
+      prompt_length: text.length,
+      scheduled_for_delta_minutes: Math.round((ms - Date.now()) / 60000),
+    });
     toast(`Scheduled on ${chosen.label.replace(' (not open)', '')}`, 'success');
   };
 

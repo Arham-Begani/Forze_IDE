@@ -40,6 +40,7 @@ import {
 import { useWorkbench } from '../../workbench/store';
 import { useProject } from '../../workbench/projectStore';
 import { basename } from '../../lib/fs';
+import { pendoTrack } from '../../lib/pendoTrack';
 import { FolderOpen } from 'lucide-react';
 import { toast } from '../../shell/toast';
 import MissionGraph from './MissionGraph';
@@ -122,8 +123,13 @@ export default function AgentManagerPage(): JSX.Element {
       return;
     }
     setGoal('');
+    pendoTrack('mission_launched', {
+      goal_length: trimmed.length,
+      model: activeModel ?? '',
+      has_workspace: !!workspaceRoot,
+    });
     void runMission({ goal: trimmed, model: activeModel, onMirror: missionKanbanBridge() });
-  }, [activeModel, busy, goal, provider]);
+  }, [activeModel, busy, goal, provider, workspaceRoot]);
 
   const spawnManual = useCallback(
     (roleId: AgentRoleId, task: string) => {
@@ -137,6 +143,11 @@ export default function AgentManagerPage(): JSX.Element {
         task,
         model: activeModel,
         status: 'queued',
+      });
+      pendoTrack('agent_spawned', {
+        role_id: roleId,
+        model: activeModel ?? '',
+        task_length: task.length,
       });
       setActiveAgent(id);
       setSpawnRole(null);

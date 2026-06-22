@@ -24,6 +24,7 @@ import {
   type FeedPost,
   type PostTag,
 } from '../../workbench/communityStore';
+import { pendoTrack } from '../../lib/pendoTrack';
 import { toast } from '../../shell/toast';
 
 const TAGS: PostTag[] = ['build-log', 'showcase', 'launch', 'milestone'];
@@ -169,6 +170,10 @@ export default function CommunityPage(): JSX.Element {
   const submitPost = () => {
     if (!body.trim()) return;
     addPost(body, tag);
+    pendoTrack('community_post_created', {
+      tag,
+      body_length: body.trim().length,
+    });
     setBody('');
     setComposing(false);
     toast('Posted to your community feed', 'success');
@@ -177,6 +182,10 @@ export default function CommunityPage(): JSX.Element {
   const submitLaunchForm = () => {
     if (!launchName.trim()) return;
     submitLaunch(launchName, launchTagline);
+    pendoTrack('demo_day_launch_submitted', {
+      product_name: launchName.trim(),
+      has_tagline: !!launchTagline.trim(),
+    });
     setLaunchName('');
     setLaunchTagline('');
     setLaunching(false);
@@ -189,6 +198,10 @@ export default function CommunityPage(): JSX.Element {
   };
   const saveProfile = () => {
     setProfile(draftProfile);
+    pendoTrack('builder_profile_updated', {
+      has_bio: !!draftProfile.bio.trim(),
+      handle: draftProfile.handle,
+    });
     setEditingProfile(false);
     toast('Builder profile updated', 'success');
   };

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { GeminiProvider } from '@forze/agents';
+import { pendoTrack } from '../lib/pendoTrack';
 import { useAgents } from '../workbench/agentStore';
 import { resolveApiKey } from '../workbench/aiConfig';
 import { useWorkbench } from '../workbench/store';
@@ -116,6 +117,12 @@ export default function VibeCanvas({ onInsertCode }: VibeCanvasProps): JSX.Eleme
       const snippet = stripCodeFences(raw) || buildPlaceholderSnippet(sketch.fileName);
       onInsertCode(snippet);
       const lines = snippet.split('\n').length;
+      pendoTrack('vibe_canvas_code_generated', {
+        image_file_name: sketch.fileName,
+        image_size_bytes: sketch.size,
+        image_mime_type: parsed.mimeType,
+        generated_lines_count: lines,
+      });
       setStatus(`Sent ${lines} line${lines === 1 ? '' : 's'} of JSX to your editor.`);
     } catch (err) {
       setLastError(err instanceof Error ? err.message : String(err));

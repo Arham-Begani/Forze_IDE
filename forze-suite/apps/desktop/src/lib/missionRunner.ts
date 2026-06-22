@@ -18,6 +18,7 @@ import {
   type AgentRoleId,
 } from './orchestrator';
 import { activeProvider } from './ai';
+import { pendoTrack } from './pendoTrack';
 import { useAgentManager } from '../workbench/agentManagerStore';
 import { toast } from '../shell/toast';
 
@@ -152,13 +153,35 @@ export async function runAgentById(
       useAgentManager.getState().appendAgentOutput(agentId, summary.trim() || EMPTY_RESPONSE);
     }
     useAgentManager.getState().setAgentStatus(agentId, 'done');
+    pendoTrack('agent_task_completed', {
+      role_id: current.roleId,
+      status: 'done',
+      tokens_used: useAgentManager.getState().agents.find((a) => a.id === agentId)?.tokens ?? 0,
+      model: current.model ?? '',
+      mission_id: current.missionId ?? '',
+      has_output: !!(useAgentManager.getState().agents.find((a) => a.id === agentId)?.output),
+    });
   } catch (err) {
     flusher.flush(); // don't lose partial output on abort/error
     if ((err as Error).name === 'AbortError') {
       useAgentManager.getState().setAgentStatus(agentId, 'stopped');
+      pendoTrack('agent_task_completed', {
+        role_id: current.roleId,
+        status: 'stopped',
+        model: current.model ?? '',
+        mission_id: current.missionId ?? '',
+        has_output: false,
+      });
     } else {
       const message = err instanceof Error ? err.message : String(err);
       useAgentManager.getState().setAgentStatus(agentId, 'error', message);
+      pendoTrack('agent_task_completed', {
+        role_id: current.roleId,
+        status: 'error',
+        model: current.model ?? '',
+        mission_id: current.missionId ?? '',
+        has_output: false,
+      });
       toast(message, 'error');
     }
   } finally {
@@ -247,6 +270,14 @@ export async function runMission(opts: {
     } catch {
       useAgentManager.getState().updateMission(missionId, { status: 'done' });
     }
+    const completedAgents = useAgentManager.getState().agents.filter((a) => agentIds.includes(a.id));
+    pendoTrack('mission_completed', {
+      agent_count: agentIds.length,
+      goal_length: goal.length,
+      model: model ?? '',
+      status: 'done',
+      total_tokens: completedAgents.reduce((sum, a) => sum + a.tokens, 0),
+    });
     toast(`Mission complete — ${agentIds.length} agents finished.`, 'success');
     return { missionId, agentIds };
   } catch (err) {

@@ -1,4 +1,5 @@
 import { linkedinConnected, postToLinkedin } from '../lib/publish';
+import { pendoTrack } from '../lib/pendoTrack';
 import { useBipSchedule } from './bipScheduleStore';
 
 let interval: number | null = null;
@@ -45,9 +46,22 @@ async function tick(): Promise<void> {
     try {
       const { url } = await postToLinkedin(post.text);
       state.markStatus(post.id, 'published', { url, lastError: undefined });
+      pendoTrack('scheduled_post_published', {
+        platform: 'linkedin',
+        post_length: post.text.length,
+        post_url: url ?? '',
+        attempts: post.attempts + 1,
+        success: true,
+      });
     } catch (err) {
       state.markStatus(post.id, 'failed', {
         lastError: err instanceof Error ? err.message : String(err),
+      });
+      pendoTrack('scheduled_post_published', {
+        platform: 'linkedin',
+        post_length: post.text.length,
+        attempts: post.attempts + 1,
+        success: false,
       });
     }
   }

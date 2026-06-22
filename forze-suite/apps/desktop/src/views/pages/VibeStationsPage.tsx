@@ -15,6 +15,7 @@ import {
 import VibeTerminal from '../../panels/VibeTerminal';
 import ScheduledPromptsPanel from './ScheduledPromptsPanel';
 import AgentBusPanel from './AgentBusPanel';
+import { pendoTrack } from '../../lib/pendoTrack';
 import { useProject } from '../../workbench/projectStore';
 import { useAgentBus } from '../../workbench/agentBusStore';
 import {
@@ -450,7 +451,17 @@ function SessionSetup({
           type="button"
           className="btn-accent"
           disabled={total === 0}
-          onClick={() => onLaunch(counts)}
+          onClick={() => {
+            pendoTrack('vibe_session_launched', {
+              total_stations: total,
+              claude_count: counts.claude ?? 0,
+              codex_count: counts.codex ?? 0,
+              antigravity_count: counts.antigravity ?? 0,
+              opencode_count: counts.opencode ?? 0,
+              has_workspace: !!useProject.getState().workspaceRoot,
+            });
+            onLaunch(counts);
+          }}
         >
           <SquareTerminal size={15} /> Launch session
         </button>

@@ -16,6 +16,7 @@ import {
   type SearchToken,
 } from '../lib/search';
 import { basename } from '../lib/fs';
+import { pendoTrack } from '../lib/pendoTrack';
 import { openFile } from '../workbench/actions';
 import { useProject } from '../workbench/projectStore';
 import { useReveal } from '../workbench/reveal';
@@ -82,6 +83,15 @@ export default function SearchView(): JSX.Element {
       if (token.cancelled) return;
       if (err) setError(err);
       setStatus('done');
+      pendoTrack('workspace_search_completed', {
+        query_length: q.length,
+        case_sensitive: options.caseSensitive,
+        whole_word: options.wholeWord,
+        regex_enabled: options.regex,
+        result_count: total,
+        file_count: acc.length,
+        capped: total >= MAX_MATCHES,
+      });
     },
     [],
   );

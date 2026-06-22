@@ -17,6 +17,7 @@ import {
   status as gitStatus,
 } from '../lib/git';
 import { confirmDialog } from '../lib/dialog';
+import { pendoTrack } from '../lib/pendoTrack';
 import { syncProject } from '../lib/sync';
 import { noteChange } from './commitGuard';
 import { useProject } from './projectStore';
@@ -52,9 +53,11 @@ export async function openWorkspace(root: string): Promise<void> {
     console.warn('[forze] fs_watch failed:', err);
   }
 
+  let isGitRepo = false;
   try {
     const repo = await gitRepoRoot(root);
-    project.setIsGitRepo(repo.length > 0);
+    isGitRepo = repo.length > 0;
+    project.setIsGitRepo(isGitRepo);
     const branch = await gitCurrentBranch(root);
     project.setBranch(branch);
     // Warm the status cache so the Source Control panel paints fast.
@@ -63,6 +66,12 @@ export async function openWorkspace(root: string): Promise<void> {
     project.setIsGitRepo(false);
     project.setBranch(null);
   }
+
+  pendoTrack('workspace_opened', {
+    is_git_repo: isGitRepo,
+    has_previous_workspace: !!previousRoot,
+    project_name: basename(root),
+  });
 
   // Mirror this project's METADATA to the cloud (never file contents). No-op
   // when there's no Forze account signed in or Supabase isn't configured.

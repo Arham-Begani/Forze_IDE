@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react';
 import { teamMatches } from '../../workbench/appData';
+import { pendoTrack } from '../../lib/pendoTrack';
 import { matchMemberId, useTeam } from '../../workbench/teamStore';
 import { useWorkbench } from '../../workbench/store';
 import { toast } from '../../shell/toast';
@@ -40,7 +41,12 @@ export default function TeamPage(): JSX.Element {
     const link = `https://forze.app/invite/${Math.random().toString(36).slice(2, 10)}`;
     void navigator.clipboard
       .writeText(link)
-      .then(() => toast('Invite link copied to clipboard', 'success'))
+      .then(() => {
+        pendoTrack('team_invite_link_created', {
+          team_size: members.length,
+        });
+        toast('Invite link copied to clipboard', 'success');
+      })
       .catch(() => toast('Could not copy invite link', 'error'));
   };
 
@@ -81,6 +87,11 @@ export default function TeamPage(): JSX.Element {
                   type="button"
                   style={{ padding: '4px 10px' }}
                   onClick={() => {
+                    pendoTrack('voice_room_toggled', {
+                      room_name: r.name,
+                      action: r.joined ? 'left' : 'joined',
+                      participant_count: r.participants,
+                    });
                     toggleRoom(r.id);
                     toast(r.joined ? `Left “${r.name}”` : `Joined “${r.name}”`, r.joined ? undefined : 'success');
                   }}
@@ -153,6 +164,9 @@ export default function TeamPage(): JSX.Element {
                     className="board-card__btn"
                     title="Remove from team"
                     onClick={() => {
+                      pendoTrack('team_member_removed', {
+                        member_role: m.role,
+                      });
                       removeMember(m.id);
                       toast(`Removed ${m.name} from the team`);
                     }}
@@ -191,6 +205,10 @@ export default function TeamPage(): JSX.Element {
                       style={{ flex: 1, justifyContent: 'center' }}
                       disabled={added}
                       onClick={() => {
+                        pendoTrack('team_member_added', {
+                          member_role: m.role,
+                          match_score: m.matchScore,
+                        });
                         addFromMatch(m);
                         toast(`${m.name} added to the team`, 'success');
                       }}
