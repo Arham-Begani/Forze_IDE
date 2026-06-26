@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/tauri.json",
   "productName": "Forze IDE",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "identifier": "app.forze.ide",
   "build": {
     "beforeDevCommand": "pnpm dev",

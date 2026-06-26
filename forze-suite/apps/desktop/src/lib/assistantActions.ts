@@ -258,7 +258,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
         `Write a short, authentic build-in-public LinkedIn post about: ${about}. ` +
           'First person, concrete and specific, no hashtag spam, 2-4 short paragraphs. ' +
           'Output only the post text.',
-        { maxTokens: 500 },
+        { maxTokens: 500, module: 'assistant' },
       );
       const body = draft.trim().slice(0, 2800);
       const whenArg = str(args, 'when');

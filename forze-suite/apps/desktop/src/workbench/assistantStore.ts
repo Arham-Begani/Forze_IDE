@@ -342,6 +342,7 @@ export const useAssistant = create<AssistantState>((set, get) => ({
       await streamConversation(convo, {
         system: buildSystem(),
         maxTokens: 900,
+        module: 'assistant',
         signal: controller.signal,
         onDelta: (delta) => {
           full += delta;

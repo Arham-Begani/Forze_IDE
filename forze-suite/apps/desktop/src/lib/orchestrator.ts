@@ -202,7 +202,13 @@ export async function planMission(
 ): Promise<MissionPlan> {
   const raw = await generateText(
     `Goal from the founder:\n"""${goal.trim()}"""\n\nProduce the delegation plan as JSON.`,
-    { system: PLANNER_SYSTEM, maxTokens: 1400, signal: options.signal, model: options.model },
+    {
+      system: PLANNER_SYSTEM,
+      maxTokens: 1400,
+      module: 'agent-manager',
+      signal: options.signal,
+      model: options.model,
+    },
   );
 
   let parsed: unknown;
@@ -411,6 +417,7 @@ export async function runAgent(
       system,
       model: params.model,
       maxTokens: 2048,
+      module: 'agent-manager',
       signal,
       onDelta,
     });
@@ -461,7 +468,14 @@ export async function runAgent(
           'markdown summary now: what you changed, what is left, and how to verify.',
       ),
     ],
-    { system, model: params.model, maxTokens: 1024, signal, onDelta },
+    {
+      system,
+      model: params.model,
+      maxTokens: 1024,
+      module: 'agent-manager',
+      signal,
+      onDelta,
+    },
   );
 }
 
@@ -508,6 +522,7 @@ export async function synthesizeMission(
     {
       system,
       maxTokens: 1400,
+      module: 'agent-manager',
       signal: options.signal,
       model: options.model,
       onDelta: options.onDelta,

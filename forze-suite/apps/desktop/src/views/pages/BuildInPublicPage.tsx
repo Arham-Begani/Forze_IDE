@@ -182,6 +182,7 @@ export default function BuildInPublicPage(): JSX.Element {
             'You are an indie founder who is great at building in public. You turn shipped work ' +
             'into engaging, honest progress updates that build an audience.',
           maxTokens: 700,
+          module: 'build-in-public',
           onDelta: (d) => setBipPost((prev) => prev + d),
         },
       );

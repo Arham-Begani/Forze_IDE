@@ -1,5 +1,6 @@
 import type { Message, Provider } from '@forze/agents';
 import { useAgents } from '../workbench/agentStore';
+import { useUsageLimits, type UsageModule } from '../workbench/usageLimitsStore';
 import {
   DEFAULT_PROVIDER_ID,
   PROVIDERS,
@@ -7,6 +8,7 @@ import {
   isProviderReady,
   providerForId,
   resolveApiKey,
+  usesBuiltInKey,
 } from '../workbench/aiConfig';
 
 /** Gemini's image-generation model ("Nano Banana"), reachable on the same key. */
@@ -21,6 +23,8 @@ export interface GenerateTextOptions {
   signal?: AbortSignal;
   /** Called with each streamed delta, for live UIs. */
   onDelta?: (delta: string) => void;
+  /** Which feature is spending here — for usage limits + per-module metering. */
+  module?: UsageModule;
 }
 
 /** The provider Forze should use right now: the default if ready, else any ready one. */
@@ -62,11 +66,25 @@ export async function streamConversation(
   if (!provider) {
     throw new Error('No AI model is connected. Add a key in Settings → Agent providers.');
   }
+
   const keys = useAgents.getState().apiKeys;
   const apiKey = resolveApiKey(provider.id, keys);
   const model = options.model ?? defaultModelFor(provider.id);
 
+  // Usage limits apply ONLY to Forze's built-in Gemini key. When the user brings
+  // their own key (BYOK — their own Gemini key, or Claude, which is BYOK-only),
+  // they spend their own quota: no limit, no metering.
+  const onBuiltInKey = usesBuiltInKey(provider.id, keys);
+  const limiter = useUsageLimits.getState();
+  if (onBuiltInKey) {
+    // Stop here if the built-in budget is already exhausted, before spending any
+    // of Forze's quota. The thrown message is surfaced as a toast by callers.
+    const verdict = limiter.checkUsage();
+    if (!verdict.ok) throw new Error(verdict.reason ?? 'AI usage limit reached.');
+  }
+
   let out = '';
+  let usage: { inputTokens?: number; outputTokens?: number } | undefined;
   for await (const chunk of provider.generate({
     model,
     apiKey,
@@ -79,7 +97,17 @@ export async function streamConversation(
       out += chunk.delta;
       options.onDelta?.(chunk.delta);
     }
+    if (chunk.usage) usage = chunk.usage;
     if (chunk.done) break;
+  }
+
+  // Meter the real cost against the daily/per-minute budgets — built-in key only.
+  if (onBuiltInKey) {
+    limiter.recordUsage(
+      provider.id,
+      options.module ?? 'other',
+      (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
+    );
   }
   return out.trim();
 }
@@ -121,6 +149,15 @@ export async function generateImage(
     );
   }
 
+  // Usage limits apply ONLY to the built-in Gemini key; a user's own Gemini key
+  // is unlimited. (Image calls count as one request.)
+  const onBuiltInKey = usesBuiltInKey(DEFAULT_PROVIDER_ID, keys);
+  const limiter = useUsageLimits.getState();
+  if (onBuiltInKey) {
+    const verdict = limiter.checkUsage();
+    if (!verdict.ok) throw new Error(verdict.reason ?? 'AI usage limit reached.');
+  }
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${encodeURIComponent(
     apiKey,
   )}`;
@@ -157,5 +194,8 @@ export async function generateImage(
     throw new Error('The model returned no image. Try a more descriptive prompt.');
   }
   const mimeType = img.mimeType || 'image/png';
+  // Gemini's image endpoint reports no token usage; count it as one request so
+  // the per-minute/per-day request budgets still apply (built-in key only).
+  if (onBuiltInKey) limiter.recordUsage(DEFAULT_PROVIDER_ID, 'image', 0);
   return { dataUrl: `data:${mimeType};base64,${img.data}`, mimeType };
 }

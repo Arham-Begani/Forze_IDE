@@ -123,7 +123,11 @@ async function attemptAutoFix(
     `RELEVANT FILE CONTENTS:\n${contexts.join('\n\n') || '(none matched — infer from the log and file paths)'}`;
 
   onLog('Asking AI to fix the build…');
-  const raw = await generateText(prompt, { system, maxTokens: 4096 });
+  const raw = await generateText(prompt, {
+    system,
+    maxTokens: 4096,
+    module: 'deploy-heal',
+  });
   const json = parseJsonLoose(raw) as
     | { explanation?: string; edits?: Array<{ file?: string; contents?: string }> }
     | null;

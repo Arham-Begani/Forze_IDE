@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Settings,
   KeyRound,
@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   UserCircle2,
   Zap,
+  Gauge,
+  RotateCcw,
 } from 'lucide-react';
 import { AnthropicProvider, GeminiProvider } from '@forze/agents';
 import { pickFolder } from '../lib/dialog';
@@ -26,6 +28,11 @@ import { openWorkspace } from '../workbench/actions';
 import { useProject } from '../workbench/projectStore';
 import { useCommitGuard } from '../workbench/commitGuardStore';
 import { useIntegrations } from '../workbench/integrationsStore';
+import {
+  useUsageLimits,
+  summarize,
+  MODULE_LABELS,
+} from '../workbench/usageLimitsStore';
 import { supabase } from '../lib/supabase';
 import { verifyToken } from '../lib/vercel';
 import ToggleSwitch from '../shell/ToggleSwitch';
@@ -184,6 +191,8 @@ export default function SettingsView(): JSX.Element {
         />
       </div>
 
+      <UsageLimitsCard />
+
       <CommitGuardCard />
 
       <VercelCard />
@@ -254,6 +263,240 @@ function CommitGuardCard(): JSX.Element {
           </span>
         }
       />
+    </div>
+  );
+}
+
+/** Compact token/number formatting for the usage meters: 1234 → "1.2K". */
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
+  return String(n);
+}
+
+function UsageLimitsCard(): JSX.Element {
+  const limits = useUsageLimits((s) => s.limits);
+  const events = useUsageLimits((s) => s.events);
+  const setLimits = useUsageLimits((s) => s.setLimits);
+  const resetToday = useUsageLimits((s) => s.resetToday);
+  const apiKeys = useAgents((s) => s.apiKeys);
+  // Limits only bite on Forze's built-in Gemini key; a user's own key is BYOK.
+  const onBuiltInKey = usesBuiltInKey(GeminiProvider.id, apiKeys);
+
+  // Tick every 5s so the rolling-minute counter decays on screen even when no
+  // new calls arrive. (Streaming also mutates `events`, which re-renders live.)
+  const [, force] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => force((n) => n + 1), 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const snap = summarize(events, Date.now());
+
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Gauge size={13} strokeWidth={1.8} />
+        <strong style={{ fontSize: 13 }}>API usage limits</strong>
+      </div>
+      <p className="dim">
+        These limits apply <strong>only to Forze&rsquo;s built-in Gemini key</strong> —
+        the one the Assistant and every other module (Agent Manager, Commit Guard,
+        deploy heal, Build in Public, image generation) use when you haven&rsquo;t
+        added your own. Bring your own Gemini or Claude key and that usage is
+        unlimited and untracked. Stored locally.
+      </p>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 11,
+          color: onBuiltInKey ? 'var(--color-accent-bright)' : 'var(--color-text-dim)',
+        }}
+      >
+        <CheckCircle2 size={12} strokeWidth={2} />
+        {onBuiltInKey
+          ? 'Built-in Gemini key active — these limits apply now.'
+          : 'You’re on your own key — limits won’t apply until you remove it.'}
+      </div>
+
+      <SettingRow
+        icon={<ShieldCheck size={13} strokeWidth={1.8} />}
+        title="Enforce limits"
+        desc="Block new built-in-key calls once a limit below is reached. Usage is still tracked when off."
+        control={
+          <ToggleSwitch
+            checked={limits.enabled}
+            onChange={(v) => setLimits({ enabled: v })}
+            label="Enforce usage limits"
+          />
+        }
+      />
+
+      {limits.enabled && (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+              gap: 10,
+            }}
+          >
+            <LimitField
+              label="Requests / min"
+              value={limits.requestsPerMinute}
+              onChange={(v) => setLimits({ requestsPerMinute: v })}
+            />
+            <LimitField
+              label="Requests / day"
+              value={limits.requestsPerDay}
+              onChange={(v) => setLimits({ requestsPerDay: v })}
+            />
+            <LimitField
+              label="Tokens / day"
+              value={limits.tokensPerDay}
+              step={100_000}
+              onChange={(v) => setLimits({ tokensPerDay: v })}
+            />
+          </div>
+          <p className="dim" style={{ fontSize: 11, margin: 0 }}>
+            Set any limit to <strong>0</strong> for unlimited.
+          </p>
+        </>
+      )}
+
+      <div
+        style={{
+          borderTop: '1px solid var(--color-border)',
+          paddingTop: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <strong style={{ fontSize: 12 }}>Today</strong>
+          <button
+            type="button"
+            onClick={resetToday}
+            disabled={snap.requestsToday === 0}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11 }}
+          >
+            <RotateCcw size={11} strokeWidth={1.8} />
+            Reset today
+          </button>
+        </div>
+
+        <UsageMeter label="Requests" used={snap.requestsToday} limit={limits.requestsPerDay} />
+        <UsageMeter label="Tokens" used={snap.tokensToday} limit={limits.tokensPerDay} compact />
+        <p className="dim" style={{ fontSize: 11, margin: 0 }}>
+          Last minute: {snap.requestsLastMinute}
+          {limits.requestsPerMinute > 0 ? ` / ${limits.requestsPerMinute}` : ''}
+        </p>
+
+        {snap.byModule.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 2 }}>
+            {snap.byModule.map((m) => (
+              <div
+                key={m.module}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: 11,
+                }}
+              >
+                <span>{MODULE_LABELS[m.module]}</span>
+                <span className="dim">
+                  {m.requests} req · {formatCount(m.tokens)} tok
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LimitField({
+  label,
+  value,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  step?: number;
+  onChange: (v: number) => void;
+}): JSX.Element {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+      <span>{label}</span>
+      <input
+        type="number"
+        min={0}
+        step={step ?? 1}
+        value={value}
+        onChange={(e) => onChange(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+        style={{ width: '100%' }}
+      />
+    </label>
+  );
+}
+
+function UsageMeter({
+  label,
+  used,
+  limit,
+  compact,
+}: {
+  label: string;
+  used: number;
+  limit: number;
+  compact?: boolean;
+}): JSX.Element {
+  const fmt = (n: number) => (compact ? formatCount(n) : n.toLocaleString());
+  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  const over = limit > 0 && used >= limit;
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: 11,
+          marginBottom: 3,
+        }}
+      >
+        <span className="dim">{label}</span>
+        <span style={{ color: over ? 'var(--color-danger)' : undefined }}>
+          {fmt(used)}
+          {limit > 0 ? ` / ${fmt(limit)}` : ' · unlimited'}
+        </span>
+      </div>
+      {limit > 0 && (
+        <div
+          style={{
+            height: 5,
+            borderRadius: 99,
+            background: 'var(--color-border)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              width: `${pct}%`,
+              height: '100%',
+              background: over ? 'var(--color-danger)' : 'var(--color-accent)',
+              transition: 'width var(--motion-fast)',
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

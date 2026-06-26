@@ -210,6 +210,7 @@ async function buildMessage(
       {
         system: 'You output only the commit subject line and nothing else.',
         maxTokens: 40,
+        module: 'commit-guard',
       },
     );
     const line = subject.split('\n')[0]?.replace(/^["'`]+|["'`]+$/g, '').trim() ?? '';
