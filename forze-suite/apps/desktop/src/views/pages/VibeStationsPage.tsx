@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import VibeTerminal from '../../panels/VibeTerminal';
-import ScheduledPromptsPanel from './ScheduledPromptsPanel';
+import SchedulerDock from './SchedulerDock';
 import AgentBusPanel from './AgentBusPanel';
 import { useProject } from '../../workbench/projectStore';
 import { useAgentBus } from '../../workbench/agentBusStore';
@@ -113,6 +113,8 @@ export default function VibeStationsPage(): JSX.Element {
         </div>
       </header>
 
+      <SchedulerDock />
+
       <div className="apppage__body vibepage__body">
         {stations.length === 0 ? (
           <SessionSetup
@@ -168,7 +170,6 @@ export default function VibeStationsPage(): JSX.Element {
       </div>
 
       <AgentBusPanel />
-      <ScheduledPromptsPanel />
     </div>
   );
 }

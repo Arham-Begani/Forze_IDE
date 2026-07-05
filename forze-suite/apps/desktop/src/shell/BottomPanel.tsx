@@ -1,8 +1,14 @@
+import { lazy, Suspense } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { useWorkbench, type BottomPanelTab } from '../workbench/store';
-import TerminalPanel from '../panels/TerminalPanel';
 import ProblemsPanel from '../panels/ProblemsPanel';
 import OutputPanel from '../panels/OutputPanel';
+import PanelFallback from './PanelFallback';
+
+// Lazy so xterm (~390 kB) stays out of the boot chunk — the bottom panel
+// defaults closed, and terminal sessions live in terminalStore, so deferring
+// the module load loses nothing.
+const TerminalPanel = lazy(() => import('../panels/TerminalPanel'));
 
 interface BottomPanelProps {
   logs: string[];
@@ -59,7 +65,11 @@ export default function BottomPanel({ logs, onClearLogs }: BottomPanelProps): JS
         </div>
       </div>
       <div className="bottom-panel__body" role="tabpanel" aria-label={activeTab}>
-        {activeTab === 'terminal' && <TerminalPanel />}
+        {activeTab === 'terminal' && (
+          <Suspense fallback={<PanelFallback />}>
+            <TerminalPanel />
+          </Suspense>
+        )}
         {activeTab === 'problems' && <ProblemsPanel />}
         {activeTab === 'output' && <OutputPanel logs={logs} />}
       </div>

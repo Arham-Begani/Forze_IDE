@@ -49,7 +49,19 @@ export function useGitStatusPolling(intervalMs = 4000): void {
   useEffect(() => {
     if (!workspaceRoot || !isGitRepo) return;
     void refresh();
-    const id = setInterval(() => void refresh(), intervalMs);
-    return () => clearInterval(id);
+    // Skip polls while the window is hidden (minimized/backgrounded) — no one
+    // can see the badge, and each poll spawns a git subprocess. Catch up the
+    // moment the window is visible again.
+    const id = setInterval(() => {
+      if (!document.hidden) void refresh();
+    }, intervalMs);
+    const onVisibility = () => {
+      if (!document.hidden) void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [workspaceRoot, isGitRepo, refresh, intervalMs]);
 }

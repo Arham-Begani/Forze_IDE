@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Message } from '@forze/agents';
 import { debouncedJSONStorage } from './debouncedStorage';
+import { secureGetJSON, secureSetJSON } from '../lib/secureSecrets';
+
+/** Keychain entry holding the per-provider BYOK keys as one JSON record. */
+const API_KEYS_SECRET = 'forze.secrets.apiKeys';
 
 export interface AgentThread {
   id: string;
@@ -18,7 +22,10 @@ interface AgentState {
   threads: AgentThread[];
   activeThreadId: string | null;
 
-  /** Per-provider API key. Phase 5 polish moves these into the OS keyring. */
+  /**
+   * Per-provider API key. Held in memory here; persisted ONLY to the OS
+   * keychain (never localStorage — see hydrateApiKeys below).
+   */
   apiKeys: Record<string, string>;
 
   createThread: (init: Pick<AgentThread, 'providerId' | 'model' | 'presetId'>) => string;
@@ -132,18 +139,61 @@ export const useAgents = create<AgentState>()(
           };
         }),
 
-      setApiKey: (providerId, key) =>
-        set((state) => ({ apiKeys: { ...state.apiKeys, [providerId]: key } })),
+      setApiKey: (providerId, key) => {
+        const apiKeys = { ...get().apiKeys, [providerId]: key };
+        set({ apiKeys });
+        secureSetJSON(API_KEYS_SECRET, apiKeys);
+      },
       getApiKey: (providerId) => get().apiKeys[providerId] ?? '',
     }),
     {
       name: 'forze.agents.v1',
       storage: debouncedJSONStorage(),
+      // apiKeys deliberately excluded — secrets live in the OS keychain only.
       partialize: (state) => ({
         threads: state.threads,
         activeThreadId: state.activeThreadId,
-        apiKeys: state.apiKeys,
       }),
     },
   ),
 );
+
+/**
+ * Load the BYOK keys from the OS keychain into the store, migrating any keys
+ * a previous build persisted in plain localStorage: lift them into the
+ * keychain, then scrub them from the localStorage blob so no plaintext copy
+ * remains on disk.
+ */
+async function hydrateApiKeys(): Promise<void> {
+  let migrated: Record<string, string> = {};
+  try {
+    const raw = localStorage.getItem('forze.agents.v1');
+    if (raw) {
+      const parsed = JSON.parse(raw) as { state?: { apiKeys?: Record<string, string> } };
+      const old = parsed.state?.apiKeys;
+      if (old && Object.values(old).some((v) => v?.trim())) {
+        migrated = old;
+        delete parsed.state!.apiKeys;
+        localStorage.setItem('forze.agents.v1', JSON.stringify(parsed));
+      }
+    }
+  } catch {
+    /* no localStorage (tests) or corrupt blob — nothing to migrate */
+  }
+
+  const stored = await secureGetJSON<Record<string, string>>(API_KEYS_SECRET);
+  // Keychain wins over the migrated plaintext; anything typed since boot wins
+  // over both.
+  const merged: Record<string, string> = { ...migrated };
+  for (const [provider, key] of Object.entries(stored)) {
+    if (typeof key === 'string') merged[provider] = key;
+  }
+  if (Object.keys(migrated).length > 0) {
+    secureSetJSON(API_KEYS_SECRET, merged);
+  }
+  if (Object.keys(merged).length > 0) {
+    useAgents.setState((s) => ({ apiKeys: { ...merged, ...s.apiKeys } }));
+  }
+}
+
+void hydrateApiKeys();

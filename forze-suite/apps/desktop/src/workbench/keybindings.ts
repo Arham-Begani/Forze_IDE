@@ -29,6 +29,10 @@ const DEFAULT_BINDINGS: Binding[] = [
   { combo: 'ctrl+s', commandId: 'workbench.action.files.save' },
   { combo: 'ctrl+w', commandId: 'workbench.action.closeActiveEditor' },
   { combo: 'shift+alt+f', commandId: 'editor.action.formatDocument' },
+  { combo: 'ctrl+=', commandId: 'workbench.action.zoomIn' },
+  { combo: 'ctrl++', commandId: 'workbench.action.zoomIn' }, // numpad plus
+  { combo: 'ctrl+-', commandId: 'workbench.action.zoomOut' },
+  { combo: 'ctrl+0', commandId: 'workbench.action.zoomReset' },
 ];
 
 function comboFromEvent(event: KeyboardEvent): string {
@@ -66,6 +70,10 @@ export function useKeybindings(): void {
         'ctrl+`',
         'ctrl+shift+`',
         'shift+alt+f', // Format Document must fire from inside the editor.
+        'ctrl+=', // Zoom works everywhere, including while typing.
+        'ctrl++',
+        'ctrl+-',
+        'ctrl+0',
       ]);
       if (!swallowAlways.has(combo) && isInEditable && combo !== 'ctrl+s') return;
       event.preventDefault();

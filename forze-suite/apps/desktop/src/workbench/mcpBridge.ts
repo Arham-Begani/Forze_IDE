@@ -33,8 +33,11 @@ export async function homeDir(): Promise<string> {
   }
 }
 
-export async function activeBufferFilePath(): Promise<string> {
+export async function activeBufferFilePath(): Promise<string | null> {
   const home = await homeDir();
+  // '~' is the "couldn't resolve" sentinel — writing through it would create a
+  // literal folder named "~" in the cwd. Skip the bridge instead.
+  if (home === '~') return null;
   const sep = home.includes('\\') ? '\\' : '/';
   return `${home}${sep}.forze${sep}active-buffer.json`;
 }
@@ -55,6 +58,7 @@ async function persist(payload: ActiveBufferPayload): Promise<void> {
   lastSerialised = serialised;
   try {
     const target = await activeBufferFilePath();
+    if (!target) return; // home dir unknown — degrade rather than mis-write
     await writeFile(target, serialised);
   } catch (err) {
     // The fs_write_file command creates intermediate directories; if it

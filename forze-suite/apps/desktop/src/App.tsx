@@ -37,6 +37,7 @@ import { startPromptScheduler } from './workbench/promptScheduler';
 import { startTeamSync } from './workbench/teamSync';
 import { computeSurvivalScore } from './workbench/survivalScore';
 import { useKeybindings, keybindingHint } from './workbench/keybindings';
+import { zoomIn, zoomOut, zoomReset } from './workbench/zoom';
 import { pickFolder } from './lib/dialog';
 import { checkForUpdates } from './lib/updater';
 import { subscribeToDevServerLogs } from './lib/tauri';
@@ -280,6 +281,27 @@ export default function App(): JSX.Element {
           if (!editor) return;
           await editor.format();
         },
+      }),
+      commands.register({
+        id: 'workbench.action.zoomIn',
+        title: 'Zoom In',
+        category: 'View',
+        keybinding: keybindingHint('workbench.action.zoomIn'),
+        run: () => zoomIn(),
+      }),
+      commands.register({
+        id: 'workbench.action.zoomOut',
+        title: 'Zoom Out',
+        category: 'View',
+        keybinding: keybindingHint('workbench.action.zoomOut'),
+        run: () => zoomOut(),
+      }),
+      commands.register({
+        id: 'workbench.action.zoomReset',
+        title: 'Reset Zoom',
+        category: 'View',
+        keybinding: keybindingHint('workbench.action.zoomReset'),
+        run: () => zoomReset(),
       }),
       commands.register({
         id: 'workbench.action.files.openFolder',

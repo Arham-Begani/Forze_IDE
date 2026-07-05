@@ -150,7 +150,11 @@ export const useAgentBus = create<AgentBusState>()((set, get) => ({
     }
     if (pollTimer !== null) window.clearInterval(pollTimer);
     void get().refresh(root);
-    pollTimer = window.setInterval(() => void get().refresh(root), POLL_MS);
+    // Skip polls while the window is hidden — each one is a bus.json read; the
+    // file is the source of truth, so we just catch up on the next visible tick.
+    pollTimer = window.setInterval(() => {
+      if (!document.hidden) void get().refresh(root);
+    }, POLL_MS);
     return () => {
       if (pollTimer !== null) {
         window.clearInterval(pollTimer);

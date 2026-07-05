@@ -1,11 +1,32 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+// Self-hosted fonts (bundled into dist) — no Google Fonts CDN. The packaged
+// app's CSP (font-src 'self') blocks remote fonts, and bundling makes first
+// paint independent of the network. Keep weights in sync with tokens.css.
+import '@fontsource/plus-jakarta-sans/300.css';
+import '@fontsource/plus-jakarta-sans/400.css';
+import '@fontsource/plus-jakarta-sans/400-italic.css';
+import '@fontsource/plus-jakarta-sans/500.css';
+import '@fontsource/plus-jakarta-sans/600.css';
+import '@fontsource/plus-jakarta-sans/700.css';
+import '@fontsource/inter/300.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/400-italic.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '@fontsource/jetbrains-mono/600.css';
 import App from './App';
 import AuthGate from './AuthGate';
 import './index.css';
 import ErrorBoundary from './shell/ErrorBoundary';
+import { initZoom } from './workbench/zoom';
 
-pendo.initialize({ visitor: { id: '' } });
+// Restore the persisted window zoom before first paint (applies to the
+// sign-in screen too, so the level never visibly jumps after boot).
+initZoom();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

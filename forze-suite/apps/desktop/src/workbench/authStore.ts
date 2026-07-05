@@ -27,14 +27,6 @@ export const useAuth = create<AuthState>((set) => ({
       userId: session?.user?.id ?? null,
       email: session?.user?.email ?? null,
     });
-    if (session?.user) {
-      pendo.identify({
-        visitor: {
-          id: session.user.id,
-          email: session.user.email ?? undefined,
-        },
-      });
-    }
   },
 }));
 

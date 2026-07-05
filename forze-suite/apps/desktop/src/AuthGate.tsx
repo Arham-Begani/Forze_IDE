@@ -92,7 +92,16 @@ export function AuthGate({ children }: { children: ReactNode }): JSX.Element {
     );
   }
 
-  if (status !== 'authed') return <SignIn />;
+  // Dev-only UI preview: `vite dev` + `?preview` skips the sign-in gate so the
+  // workbench can be inspected/screenshotted in a plain browser. import.meta
+  // .env.DEV is compile-time false in `vite build`, so this branch (and the
+  // bypass) cannot exist in a packaged app.
+  const devPreview =
+    import.meta.env.DEV &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('preview');
+
+  if (status !== 'authed' && !devPreview) return <SignIn />;
   return <>{children}</>;
 }
 

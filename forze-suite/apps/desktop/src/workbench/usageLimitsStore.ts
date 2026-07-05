@@ -29,6 +29,7 @@ export type UsageModule =
   | 'deploy-heal'
   | 'build-in-public'
   | 'image'
+  | 'scheduler'
   | 'other';
 
 /** Human labels for the usage breakdown in Settings. */
@@ -39,6 +40,7 @@ export const MODULE_LABELS: Record<UsageModule, string> = {
   'deploy-heal': 'Deploy heal',
   'build-in-public': 'Build in Public',
   image: 'Image generation',
+  scheduler: 'Autopilot scheduler',
   other: 'Other',
 };
 
