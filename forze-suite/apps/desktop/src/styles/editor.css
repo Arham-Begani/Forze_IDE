@@ -178,17 +178,17 @@
 }
 
 /* === Syntax highlighting (highlight.js token theme) ======================
-   Premium dark palette anchored on the IDE's cyan accent, with a few
-   restrained complementary hues so every language reads clearly on the
-   near-black editor background. Unclassed text inherits .codeedit__pre. */
+   Graphite palette: white-hot keywords on a monochrome chrome, with cool
+   restrained hues (steel, sage, sand) reserved for content so code stays
+   scannable without any brand color. Unclassed text inherits .codeedit__pre. */
 .codeedit__pre .hljs { color: var(--color-text); background: transparent; }
 
-/* Comments & docs â€” recede */
+/* Comments & docs — recede */
 .hljs-comment,
-.hljs-quote { color: #5b6273; font-style: italic; }
-.hljs-doctag { color: #a9f4ff; font-style: italic; }
+.hljs-quote { color: #6a6a6a; font-style: italic; }
+.hljs-doctag { color: #b0b0b0; font-style: italic; }
 
-/* Keywords & control flow â€” the cyan accent */
+/* Keywords & control flow — brightest ink */
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-literal,
@@ -201,35 +201,35 @@
 .hljs-string,
 .hljs-regexp,
 .hljs-char.escape_,
-.hljs-addition { color: #9fc176; }
+.hljs-addition { color: #98b47c; }
 
-/* Numbers, booleans, constants */
+/* Numbers, booleans, constants — sand */
 .hljs-number,
 .hljs-symbol,
-.hljs-bullet { color: #e0b07a; }
+.hljs-bullet { color: #cbb88a; }
 
-/* Functions */
+/* Functions — brushed steel */
 .hljs-title.function_,
 .hljs-title,
-.hljs-built_in { color: #82b8f5; }
+.hljs-built_in { color: #93accb; }
 
-/* Types, classes */
+/* Types, classes — desaturated sage */
 .hljs-title.class_,
 .hljs-type,
-.hljs-class .hljs-title { color: #5ed3c0; }
+.hljs-class .hljs-title { color: #8fbcb5; }
 
-/* Object keys, attributes, params */
+/* Object keys, attributes, params — cool parchment */
 .hljs-attr,
 .hljs-attribute,
 .hljs-property,
-.hljs-variable.language_ { color: #a9f4ff; }
+.hljs-variable.language_ { color: #b5c8dd; }
 
 /* Markup: tags & names (HTML/XML/JSX) */
 .hljs-tag,
 .hljs-name,
 .hljs-selector-id,
 .hljs-selector-class,
-.hljs-selector-pseudo { color: #82b8f5; }
+.hljs-selector-pseudo { color: #93accb; }
 
 /* Variables, template substitutions */
 .hljs-variable,
@@ -237,24 +237,24 @@
 .hljs-subst { color: var(--color-text); }
 
 /* Preprocessor / decorators / annotations */
-.hljs-meta { color: #8b94a8; }
+.hljs-meta { color: #8a8a8a; }
 
 /* Punctuation & operators */
 .hljs-operator,
-.hljs-punctuation { color: #94a3b8; }
+.hljs-punctuation { color: #8a8a8a; }
 
 /* Diffs / emphasis */
-.hljs-deletion { color: #e0808a; }
+.hljs-deletion { color: #d98079; }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: var(--font-weight-semibold); }
 
-/* Explorer file icons â€” monochrome with cyan folders (single accent). */
-.tree-row .icon-folder { color: var(--color-accent-bright) !important; }
-.tree-row .icon-code { color: #cbd5e1 !important; }
-.tree-row .icon-config { color: #e2e8f0 !important; }
-.tree-row .icon-env { color: #94a3b8 !important; }
-.tree-row .icon-doc { color: #cbd5e1 !important; }
-.tree-row .icon-file { color: #94a3b8 !important; }
+/* Explorer file icons — monochrome silver with muted-steel folders. */
+.tree-row .icon-folder { color: #94a8bd !important; }
+.tree-row .icon-code { color: #c8c8c8 !important; }
+.tree-row .icon-config { color: #dcdcdc !important; }
+.tree-row .icon-env { color: #8a8a8a !important; }
+.tree-row .icon-doc { color: #c8c8c8 !important; }
+.tree-row .icon-file { color: #8a8a8a !important; }
 .tree-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -352,9 +352,8 @@
 }
 
 .bottom-panel__tab.is-active {
-  color: var(--color-accent-bright);
+  color: var(--color-text);
   border-bottom-color: var(--color-accent);
-  box-shadow: 0 2px 6px -2px rgba(var(--color-accent-rgb), 0.35);
 }
 
 .bottom-panel__actions {
@@ -455,7 +454,6 @@
 
 .status-bar__chip.is-danger {
   color: var(--color-danger);
-  text-shadow: 0 0 6px rgba(229, 100, 95, 0.3);
 }
 
 .status-bar__chip.is-warn {
@@ -464,7 +462,6 @@
 
 .status-bar__chip.is-ok {
   color: var(--color-ok);
-  text-shadow: 0 0 6px rgba(var(--color-overlay-rgb), 0.25);
 }
 
 /* === Resize handles ===================================================== */
@@ -491,11 +488,6 @@
 }
 
 /* === Premium polish (editor chrome) ====================================== */
-
-/* Resize handles glow while gripped so the drag feels alive. */
-.resize-handle[data-resize-handle-active] {
-  box-shadow: 0 0 12px rgba(var(--color-accent-rgb), 0.55);
-}
 
 /* Bottom-panel tabs: underline grows from the center instead of snapping. */
 .bottom-panel__tab {
@@ -585,7 +577,6 @@
 
 .term-strip__tab.is-active .term-strip__dot {
   background: var(--color-accent);
-  box-shadow: 0 0 7px var(--color-accent);
 }
 
 .term-strip__close {
