@@ -407,8 +407,8 @@ function StatCard({
             width: 32,
             height: 32,
             borderRadius: 8,
-            background: 'rgba(0, 212, 255, 0.08)',
-            border: '1px solid rgba(0, 212, 255, 0.18)',
+            background: 'rgba(var(--color-accent-rgb), 0.08)',
+            border: '1px solid rgba(var(--color-accent-rgb), 0.18)',
             color: 'var(--color-accent-bright)',
           }}
         >
