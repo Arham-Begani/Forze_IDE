@@ -18,7 +18,6 @@ body,
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  font-feature-settings: 'cv11', 'ss01', 'ss03';
 }
 
 ::selection {
@@ -58,25 +57,31 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Primary action — a matte "piano key": bone fill, ink text. Reads through
+   text/bg tokens so every theme (and the light mode flip) gets it for free.
+   No glow, no sheen — depth is one shadow and a press. */
 button.btn-primary {
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  border: 1px solid rgba(var(--color-accent-rgb), 0.55);
+  background: var(--color-text);
+  color: var(--color-text-inverted);
+  border: 1px solid transparent;
   font-weight: var(--font-weight-semibold);
   letter-spacing: -0.1px;
-  box-shadow: 0 2px 8px rgba(var(--color-accent-rgb), 0.25), inset 0 1px 0 rgba(var(--color-overlay-rgb), 0.15);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 16px -8px rgba(0, 0, 0, 0.5);
   transition: all var(--motion-fast);
 }
 
 button.btn-primary:hover:not(:disabled) {
-  background: var(--color-accent-bright);
+  background: var(--color-text);
+  filter: brightness(1.06);
+  border-color: transparent;
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(var(--color-accent-rgb), 0.4), inset 0 1px 0 rgba(var(--color-overlay-rgb), 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 10px 22px -10px rgba(0, 0, 0, 0.55);
 }
 
 button.btn-primary:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(var(--color-accent-rgb), 0.2);
+  filter: brightness(0.98);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 button.btn-ghost {
@@ -175,50 +180,12 @@ kbd {
 }
 
 /* === Premium polish (base layer) =========================================
-   Tactile press on every button, and a light-sweep sheen across filled
-   accent buttons on hover. Transform/opacity only — GPU-composited. */
+   Matte finish responds to touch, not light: a tactile press on every button,
+   no sheens or light sweeps anywhere. */
 
 button:active:not(:disabled) {
   transform: scale(0.97);
   transition-duration: 0.08s;
-}
-
-button.btn-primary,
-.btn-accent {
-  position: relative;
-  overflow: hidden;
-}
-
-/* Diagonal light sweep that glides across the fill on hover. */
-button.btn-primary::after,
-.btn-accent::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -60%;
-  width: 50%;
-  background: linear-gradient(
-    105deg,
-    transparent,
-    rgba(var(--color-overlay-rgb), 0.28),
-    transparent
-  );
-  transform: skewX(-20deg);
-  opacity: 0;
-  pointer-events: none;
-  transition: none;
-}
-
-button.btn-primary:hover:not(:disabled)::after,
-.btn-accent:hover:not(:disabled)::after {
-  opacity: 1;
-  animation: btnSheen 0.65s var(--ease-out) forwards;
-}
-
-@keyframes btnSheen {
-  from { left: -60%; }
-  to { left: 120%; }
 }
 
 /* === Unified focus ring ===================================================
