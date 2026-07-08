@@ -11,43 +11,43 @@ import { openLink } from '../lib/openLink';
  * is defined once and can never drift between the two surfaces.
  */
 
-/** ANSI palette for the dark themes (the matte-black canvas). */
+/** ANSI palette for the dark themes (the graphite matte-black canvas). */
 const DARK_XTERM_THEME: ITheme = {
-  background: '#050505',
-  foreground: '#e4e4e7',
-  cursor: '#eaf9ff',
-  cursorAccent: '#050505',
-  // Selection picks up the brand accent so highlighting feels part of the IDE,
-  // and dims when the terminal loses focus — the native, expensive-feeling cue.
-  selectionBackground: 'rgba(0, 212, 255, 0.26)',
-  selectionInactiveBackground: 'rgba(228, 228, 231, 0.10)',
+  background: '#0b0b0b',
+  foreground: '#e5e5e5',
+  cursor: '#ffffff',
+  cursorAccent: '#0b0b0b',
+  // Monochrome selection — a lifted silver plate, dimming when the terminal
+  // loses focus (the native, expensive-feeling cue).
+  selectionBackground: 'rgba(229, 229, 229, 0.24)',
+  selectionInactiveBackground: 'rgba(229, 229, 229, 0.10)',
   selectionForeground: undefined,
-  black: '#050505',
-  red: '#ff7170',
-  green: '#7ee787',
-  yellow: '#d7d7d7',
-  blue: '#00d4ff',
-  magenta: '#74ecff',
-  cyan: '#9cdcfe',
-  white: '#dcdde6',
-  brightBlack: '#5a5d68',
-  brightRed: '#ff9090',
-  brightGreen: '#9ae6a4',
-  brightYellow: '#e5e5e5',
-  brightBlue: '#74ecff',
-  brightMagenta: '#a9f4ff',
-  brightCyan: '#c9efff',
-  brightWhite: '#f4f4f7',
+  black: '#0b0b0b',
+  red: '#f07a72',
+  green: '#a8c08a',
+  yellow: '#cbb88a',
+  blue: '#93accb',
+  magenta: '#c69ac6',
+  cyan: '#8fc6c4',
+  white: '#d6d6d6',
+  brightBlack: '#6a6a6a',
+  brightRed: '#ff9c94',
+  brightGreen: '#c0d6a4',
+  brightYellow: '#e3d2a4',
+  brightBlue: '#b3c8e2',
+  brightMagenta: '#dcb6dc',
+  brightCyan: '#aedcda',
+  brightWhite: '#f5f5f5',
 };
 
 /** ANSI palette for the Daylight (light) theme — white canvas, dark ink. */
 const LIGHT_XTERM_THEME: ITheme = {
   background: '#ffffff',
   foreground: '#1f2328',
-  cursor: '#0e7490',
+  cursor: '#171717',
   cursorAccent: '#ffffff',
-  selectionBackground: 'rgba(14, 116, 144, 0.20)',
-  selectionInactiveBackground: 'rgba(15, 23, 42, 0.08)',
+  selectionBackground: 'rgba(23, 23, 23, 0.18)',
+  selectionInactiveBackground: 'rgba(23, 23, 23, 0.08)',
   selectionForeground: undefined,
   black: '#24292f',
   red: '#cf222e',
