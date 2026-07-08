@@ -26,7 +26,6 @@
 .mgraph__live.is-on { color: var(--color-accent-bright); }
 .mgraph__live.is-on .mgraph__live-dot {
   background: var(--color-accent);
-  box-shadow: 0 0 8px var(--color-accent), 0 0 2px var(--color-accent-bright);
   animation: agentmgrPulse 1.2s ease-in-out infinite;
 }
 
@@ -54,7 +53,6 @@
 @keyframes mgraphDash { to { stroke-dashoffset: -22; } }
 .mgraph__packet {
   fill: var(--color-accent-bright);
-  filter: drop-shadow(0 0 4px var(--color-accent));
 }
 
 /* Hub: the Architect -------------------------------------------------- */
@@ -73,7 +71,6 @@
   stroke: var(--color-accent);
   stroke-width: 3;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 5px var(--color-accent-glow));
   transition: stroke-dashoffset 0.6s ease;
 }
 .mgraph__hub-label {
@@ -138,7 +135,7 @@
 }
 .mgraph__node[data-selected='true'] .mgraph__node-ring {
   stroke: var(--color-accent-bright);
-  filter: drop-shadow(0 0 6px var(--color-accent-glow));
+  stroke-width: 2.5;
 }
 .mgraph__node[data-selected='true'] .mgraph__node-label { fill: var(--color-text); }
 
@@ -189,13 +186,13 @@
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--color-accent-border);
   color: var(--color-accent-bright);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 18px var(--color-accent-glow);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
   cursor: pointer;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
 }
 .fassist__bubble:hover {
   transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.6), 0 0 28px var(--color-accent-glow);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.6);
 }
 .fassist__bubble svg { animation: agentmgrPulse 3s ease-in-out infinite; }
 
@@ -2023,11 +2020,12 @@
   transform: translateY(-1px);
 }
 
-/* Confirm cards pulse softly while waiting on the user. */
+/* Confirm cards pulse their hairline softly while waiting on the user —
+   border only, matte surfaces never emit light. */
 .fassist__confirm {
-  animation: confirmGlow 2.2s ease-in-out infinite;
+  animation: confirmPulse 2.2s ease-in-out infinite;
 }
-@keyframes confirmGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0); }
-  50% { box-shadow: 0 0 14px 0 rgba(var(--color-accent-rgb), 0.18); }
+@keyframes confirmPulse {
+  0%, 100% { border-color: var(--color-border); }
+  50% { border-color: rgba(var(--color-accent-rgb), 0.4); }
 }
