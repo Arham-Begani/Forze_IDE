@@ -115,8 +115,8 @@ export default function DashboardPage(): JSX.Element {
                     width: '32px',
                     height: '32px',
                     borderRadius: '8px',
-                    background: 'rgba(0, 212, 255, 0.08)',
-                    border: '1px solid rgba(0, 212, 255, 0.18)',
+                    background: 'rgba(var(--color-accent-rgb), 0.08)',
+                    border: '1px solid rgba(var(--color-accent-rgb), 0.18)',
                     color: 'var(--color-accent-bright)',
                   }}>
                     <Icon size={16} strokeWidth={2} />
