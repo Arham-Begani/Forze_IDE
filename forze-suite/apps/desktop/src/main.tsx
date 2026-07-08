@@ -3,17 +3,11 @@ import ReactDOM from 'react-dom/client';
 // Self-hosted fonts (bundled into dist) — no Google Fonts CDN. The packaged
 // app's CSP (font-src 'self') blocks remote fonts, and bundling makes first
 // paint independent of the network. Keep weights in sync with tokens.css.
-import '@fontsource/plus-jakarta-sans/300.css';
-import '@fontsource/plus-jakarta-sans/400.css';
-import '@fontsource/plus-jakarta-sans/400-italic.css';
-import '@fontsource/plus-jakarta-sans/500.css';
-import '@fontsource/plus-jakarta-sans/600.css';
-import '@fontsource/plus-jakarta-sans/700.css';
-import '@fontsource/inter/300.css';
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/500.css';
-import '@fontsource/inter/600.css';
-import '@fontsource/inter/700.css';
+import '@fontsource/instrument-sans/400.css';
+import '@fontsource/instrument-sans/400-italic.css';
+import '@fontsource/instrument-sans/500.css';
+import '@fontsource/instrument-sans/600.css';
+import '@fontsource/instrument-sans/700.css';
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/400-italic.css';
 import '@fontsource/jetbrains-mono/500.css';

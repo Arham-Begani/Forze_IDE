@@ -18,9 +18,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@fontsource/inter": "^5.2.8",
+    "@fontsource/instrument-sans": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
-    "@fontsource/plus-jakarta-sans": "^5.2.8",
     "@forze/agents": "workspace:*",
     "@forze/database": "workspace:*",
     "@forze/shared": "workspace:*",
