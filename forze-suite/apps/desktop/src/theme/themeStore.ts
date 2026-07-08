@@ -22,53 +22,53 @@ interface ThemeState {
 export const THEMES: { id: ThemeId; label: string; description: string }[] = [
   {
     id: 'forze-noir',
-    label: 'Noir',
-    description: 'Default. Near-black with platinum-silver accents.',
+    label: 'Matte',
+    description: 'Default. Pure monochrome — matte black, silver ink, no color.',
   },
   {
     id: 'forze-daylight',
     label: 'Daylight',
-    description: 'Light mode. White surfaces, deep-cyan accent.',
+    description: 'Light mode. Paper surfaces, graphite ink. Monochrome.',
   },
   {
     id: 'forze-midnight',
     label: 'Midnight',
-    description: 'Deep blue surfaces, cold lighting.',
+    description: 'Cold blue-black surfaces, steel-blue accent.',
   },
   {
     id: 'forze-graphite',
     label: 'Graphite',
-    description: 'Pure neutral grey, no chroma. Print-feel.',
+    description: 'The monochrome look, one step lighter and softer.',
   },
   {
     id: 'forze-indigo',
     label: 'Indigo',
-    description: 'Matte black with a single electric-indigo accent.',
+    description: 'Matte black with a soft indigo accent.',
   },
   {
     id: 'forze-emerald',
     label: 'Emerald',
-    description: 'Black canvas, vivid emerald-green highlights.',
+    description: 'Matte green-black canvas, sea-green accent.',
   },
   {
     id: 'forze-amber',
     label: 'Amber',
-    description: 'Warm amber accent over true black. Solar.',
+    description: 'Warm amber accent over matte black. Solar.',
   },
   {
     id: 'forze-rose',
     label: 'Rose',
-    description: 'Soft rose-pink accent on matte black.',
+    description: 'Soft rose accent on matte black.',
   },
   {
     id: 'forze-violet',
     label: 'Violet',
-    description: 'Deep violet accent, cold black surfaces.',
+    description: 'Muted violet accent on matte black.',
   },
   {
     id: 'forze-crimson',
     label: 'Crimson',
-    description: 'High-energy crimson accent on black.',
+    description: 'Restrained crimson accent on matte black.',
   },
 ];
 
