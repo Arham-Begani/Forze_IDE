@@ -218,7 +218,6 @@ button.btn-danger:hover:not(:disabled) {
   background: rgba(var(--color-accent-rgb), 0.15);
   border-left-color: var(--color-accent);
   color: var(--color-text);
-  box-shadow: inset 10px 0 30px rgba(var(--color-accent-rgb), 0.1);
 }
 
 /* === Premium polish (overlays) =========================================== */
