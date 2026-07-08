@@ -57,12 +57,9 @@ export function AreaSpark({
     >
       <defs>
         <linearGradient id="areaGlow" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.2" />
+          <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.16" />
           <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0.0" />
         </linearGradient>
-        <filter id="lineShadow" x="-10%" y="-10%" width="120%" height="130%">
-          <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="var(--color-accent)" floodOpacity="0.3" />
-        </filter>
       </defs>
 
       {[0.25, 0.5, 0.75, 1].map((f) => (
@@ -72,12 +69,12 @@ export function AreaSpark({
           x2={width - pad}
           y1={height - pad - f * (height - pad * 2)}
           y2={height - pad - f * (height - pad * 2)}
-          stroke="rgba(255,255,255,0.03)"
+          stroke="rgba(var(--color-overlay-rgb), 0.04)"
           strokeWidth={1}
         />
       ))}
       <polygon points={area} fill="url(#areaGlow)" />
-      <polyline points={line} fill="none" stroke={accent} strokeWidth={2.5} filter="url(#lineShadow)" />
+      <polyline points={line} fill="none" stroke={accent} strokeWidth={2.5} />
 
       {hiPoint && peak > 0 && (
         <>
@@ -86,7 +83,7 @@ export function AreaSpark({
             y1={y(hiPoint.value)}
             x2={x(hi)}
             y2={height - pad}
-            stroke="rgba(0, 212, 255, 0.45)"
+            stroke="rgba(var(--color-accent-rgb), 0.45)"
             strokeWidth={1}
             strokeDasharray="3 3"
           />
@@ -95,9 +92,8 @@ export function AreaSpark({
             cy={y(hiPoint.value)}
             r={5.5}
             fill={accent}
-            stroke="#ffffff"
+            stroke="var(--color-bg)"
             strokeWidth={1.5}
-            style={{ filter: 'drop-shadow(0 0 6px var(--color-accent))' }}
           />
           {/* Tooltip with the point's real value. Clamp x so it stays on-canvas. */}
           <g
@@ -107,8 +103,8 @@ export function AreaSpark({
               width="120"
               height="44"
               rx="6"
-              fill="rgba(15, 15, 22, 0.95)"
-              stroke="rgba(255, 255, 255, 0.08)"
+              fill="var(--color-bg-elevated)"
+              stroke="rgba(var(--color-overlay-rgb), 0.1)"
               strokeWidth="1"
               style={{ filter: 'drop-shadow(0 8px 24px rgba(0, 0, 0, 0.6))' }}
             />
@@ -116,10 +112,10 @@ export function AreaSpark({
               {tipTitle}
             </text>
             <circle cx="14" cy="29" r="3.5" fill="var(--color-accent-bright)" />
-            <text x="24" y="32" fill="#ffffff" fontSize="10" fontWeight="bold">
+            <text x="24" y="32" fill="var(--color-text)" fontSize="10" fontWeight="bold">
               {seriesLabel ? 'Latest' : pointLabel(hiPoint)}
             </text>
-            <text x="110" y="32" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="end">
+            <text x="110" y="32" fill="var(--color-text)" fontSize="10" fontWeight="bold" textAnchor="end">
               {format(hiPoint.value)}
             </text>
           </g>
@@ -152,7 +148,7 @@ export function AreaSpark({
 export function BarMini({
   data,
   height = 180,
-  accent = '#ededed',
+  accent = 'var(--color-text-muted)',
 }: {
   data: AreaPoint[];
   height?: number;
