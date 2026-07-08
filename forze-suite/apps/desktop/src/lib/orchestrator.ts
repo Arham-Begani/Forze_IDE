@@ -45,7 +45,7 @@ export const ROLES: Record<AgentRoleId, AgentRole> = {
     id: 'architect',
     label: 'Architect',
     blurb: 'Plans the mission and delegates work to the right agents.',
-    accent: '#00d4ff',
+    accent: '#e5e5e5',
     systemPrompt:
       'You are the Architect, the orchestrator of a team of AI coding agents. ' +
       'You decompose a goal into the smallest set of independent, well-scoped ' +
@@ -55,7 +55,7 @@ export const ROLES: Record<AgentRoleId, AgentRole> = {
     id: 'builder',
     label: 'Builder',
     blurb: 'Implements features — proposes concrete diffs and code.',
-    accent: '#00d4ff',
+    accent: '#93accb',
     systemPrompt:
       `${SHARED_CONTEXT} You are the Builder. Implement the assigned task. Output ` +
       'the actual code or a precise diff, the files it touches, and a one-line ' +
@@ -65,7 +65,7 @@ export const ROLES: Record<AgentRoleId, AgentRole> = {
     id: 'reviewer',
     label: 'Reviewer',
     blurb: 'Reviews code & decisions for correctness and clarity.',
-    accent: '#74ecff',
+    accent: '#9dbfae',
     systemPrompt:
       `${SHARED_CONTEXT} You are the Reviewer. Critique the assigned work for ` +
       'correctness, edge cases, and maintainability. Output a numbered list of ' +
@@ -75,7 +75,7 @@ export const ROLES: Record<AgentRoleId, AgentRole> = {
     id: 'security',
     label: 'Security',
     blurb: 'Audits for the flaws AI assistants commonly introduce.',
-    accent: '#e5645f',
+    accent: '#e0655c',
     systemPrompt:
       `${SHARED_CONTEXT} You are the Security reviewer on the operator's own team. ` +
       "You are auditing the operator's own first-party codebase, with their " +
@@ -92,7 +92,7 @@ export const ROLES: Record<AgentRoleId, AgentRole> = {
     id: 'designer',
     label: 'Designer',
     blurb: 'Sharpens UI/UX, layout, and visual hierarchy.',
-    accent: '#e5e5e5',
+    accent: '#d6d6d6',
     systemPrompt:
       `${SHARED_CONTEXT} You are the Designer. Improve the UX and visual design of ` +
       'the assigned surface. Output specific, implementable changes (spacing, ' +
@@ -102,7 +102,7 @@ export const ROLES: Record<AgentRoleId, AgentRole> = {
     id: 'qa',
     label: 'QA',
     blurb: 'Writes test plans and finds what will break.',
-    accent: '#a9f4ff',
+    accent: '#cbb88a',
     systemPrompt:
       `${SHARED_CONTEXT} You are QA. Produce a focused test plan for the assigned ` +
       'work: the critical paths, edge cases, and at least one concrete test (code ' +
@@ -112,7 +112,7 @@ export const ROLES: Record<AgentRoleId, AgentRole> = {
     id: 'marketing',
     label: 'Marketing',
     blurb: 'Drafts launch copy grounded in what actually shipped.',
-    accent: '#d7d7d7',
+    accent: '#ababab',
     systemPrompt:
       `${SHARED_CONTEXT} You are the Marketing agent. Draft launch copy grounded in ` +
       'the assigned change — never vague hype. Output one post per platform asked ' +
