@@ -31,9 +31,9 @@ export interface AgentDef {
  *  special-casing required. */
 export const AGENTS: AgentDef[] = [
   { id: 'claude', label: 'Claude Code', command: 'claude --dangerously-skip-permissions', color: '#e5e5e5', blurb: "Anthropic's agentic coding CLI" },
-  { id: 'codex', label: 'Codex', command: 'codex', color: '#00d4ff', blurb: "OpenAI's Codex CLI" },
-  { id: 'antigravity', label: 'Antigravity CLI', command: 'agy --dangerously-skip-permissions', color: '#74ecff', blurb: "Google's Antigravity agent CLI" },
-  { id: 'opencode', label: 'OpenCode', command: 'opencode', color: '#a3a3a3', blurb: 'Open-source terminal coding agent' },
+  { id: 'codex', label: 'Codex', command: 'codex', color: '#93accb', blurb: "OpenAI's Codex CLI" },
+  { id: 'antigravity', label: 'Antigravity CLI', command: 'agy --dangerously-skip-permissions', color: '#9dbfae', blurb: "Google's Antigravity agent CLI" },
+  { id: 'opencode', label: 'OpenCode', command: 'opencode', color: '#ababab', blurb: 'Open-source terminal coding agent' },
 ];
 
 export function agentDef(id: AgentId): AgentDef {
