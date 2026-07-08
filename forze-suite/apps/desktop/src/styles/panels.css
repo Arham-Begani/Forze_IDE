@@ -32,8 +32,8 @@
   transition: all var(--motion-medium);
 }
 .card:hover {
-  border-color: rgba(var(--color-accent-rgb), 0.25);
-  box-shadow: var(--shadow-card), 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-card), 0 14px 32px -10px rgba(0, 0, 0, 0.5);
   transform: translateY(-2px);
 }
 
@@ -170,10 +170,11 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  font-size: var(--font-size-xs);
-  letter-spacing: 2px;
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-accent-bright);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2.4px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-accent);
   text-transform: uppercase;
 }
 
@@ -182,17 +183,16 @@
   height: 7px;
   border-radius: 50%;
   background: var(--color-accent);
-  box-shadow: 0 0 10px var(--color-accent);
 }
 
+/* The hero line — big, bold, monochrome grotesk. */
 .launch__title {
   margin: 0;
-  font-size: var(--font-size-display);
-  letter-spacing: -1.2px;
+  font-size: 40px;
+  letter-spacing: -1.4px;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.06;
   color: var(--color-text);
-  text-shadow: 0 0 26px rgba(229, 229, 229, 0.08);
 }
 
 .launch__subtitle {
@@ -225,14 +225,13 @@
 
 .launch__prompt:focus-within {
   border-color: rgba(var(--color-accent-rgb), 0.45);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 4px rgba(var(--color-accent-rgb), 0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
 }
 
 .launch__prompt-icon {
-  color: var(--color-accent-bright);
+  color: var(--color-accent);
   margin-top: 5px;
   flex-shrink: 0;
-  filter: drop-shadow(0 0 4px var(--color-accent));
 }
 
 .launch__prompt-input {
@@ -270,15 +269,16 @@
   justify-content: center;
   background: var(--color-accent);
   color: var(--color-on-accent);
-  border: 1px solid rgba(var(--color-accent-rgb), 0.55);
-  box-shadow: 0 2px 8px rgba(var(--color-accent-rgb), 0.3);
+  border: 1px solid transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   transition: all var(--motion-fast);
 }
 
 .launch__send:hover:not(:disabled) {
-  background: var(--color-accent-bright);
+  background: var(--color-accent);
+  filter: brightness(1.08);
   transform: scale(1.05);
-  box-shadow: 0 4px 14px rgba(var(--color-accent-rgb), 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 .launch__send:disabled {
@@ -362,9 +362,9 @@
 }
 
 .feature-card:hover {
-  border-color: rgba(var(--color-accent-rgb), 0.25);
+  border-color: var(--color-border-strong);
   transform: translateY(-4px);
-  box-shadow: var(--shadow-card), 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+  box-shadow: var(--shadow-card), 0 14px 32px -10px rgba(0, 0, 0, 0.5);
 }
 
 .feature-card__icon {
@@ -384,7 +384,6 @@
 .feature-card:hover .feature-card__icon {
   background: var(--color-accent);
   color: var(--color-on-accent);
-  box-shadow: 0 0 10px rgba(var(--color-accent-rgb), 0.4);
 }
 
 .feature-card__title {
@@ -451,7 +450,6 @@
 .wizard__step-indicator span.is-current,
 .wizard__step-indicator span.is-past {
   background: var(--color-accent);
-  box-shadow: 0 0 6px var(--color-accent);
 }
 
 .wizard__title {
@@ -706,9 +704,9 @@ kbd.kbd-inline {
   transition: all var(--motion-spring);
 }
 
-/* Launch prompt: the spark icon glows brighter while composing. */
+/* Launch prompt: the spark icon brightens while composing. */
 .launch__prompt:focus-within .launch__prompt-icon {
-  filter: drop-shadow(0 0 8px var(--color-accent));
+  color: var(--color-accent-bright);
   transform: scale(1.08);
   transition: all var(--motion-medium);
 }
