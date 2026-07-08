@@ -76,7 +76,7 @@
   color: var(--color-text);
 }
 
-/* Glowing accent bar marks the selected row. */
+/* Machined accent bar marks the selected row. */
 .cmd-palette__item[data-selected='true']::before {
   content: '';
   position: absolute;
@@ -86,7 +86,6 @@
   width: 3px;
   border-radius: var(--radius-pill);
   background: var(--color-accent);
-  box-shadow: 0 0 8px var(--color-accent);
   animation: expandIn 0.2s var(--ease-out) both;
 }
 
