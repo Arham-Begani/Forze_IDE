@@ -24,11 +24,12 @@
   -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
+/* Page titles — bold tight grotesk, monochrome. */
 .apppage__title {
   margin: 0;
   font-size: var(--font-size-3xl);
   font-weight: 700;
-  letter-spacing: -0.8px;
+  letter-spacing: -0.6px;
   line-height: 1.1;
   display: flex;
   align-items: center;
@@ -37,7 +38,7 @@
 }
 
 .apppage__title svg {
-  color: var(--color-accent-bright);
+  color: var(--color-accent);
 }
 
 .apppage__subtitle {
@@ -65,9 +66,9 @@
   transition: all var(--motion-medium);
 }
 .appcard:hover {
-  border-color: rgba(var(--color-accent-rgb), 0.25);
+  border-color: var(--color-border-strong);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-card), 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+  box-shadow: var(--shadow-card), 0 14px 32px -10px rgba(0, 0, 0, 0.5);
 }
 
 .appcard__title {
@@ -103,24 +104,25 @@
   transition: all var(--motion-medium);
 }
 .kpi:hover {
-  border-color: rgba(var(--color-accent-rgb), 0.25);
+  border-color: var(--color-border-strong);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-card), 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--color-accent-rgb), 0.08);
+  box-shadow: var(--shadow-card), 0 14px 32px -10px rgba(0, 0, 0, 0.5);
 }
 .kpi__label {
-  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  font-size: 10px;
   color: var(--color-text-dim);
-  letter-spacing: 0.6px;
+  letter-spacing: 1.3px;
   text-transform: uppercase;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 .kpi__value {
   font-size: 28px;
   font-weight: 700;
-  letter-spacing: -0.8px;
+  letter-spacing: -0.6px;
   margin-top: 12px;
   color: var(--color-text);
-  text-shadow: 0 2px 10px rgba(var(--color-overlay-rgb), 0.05);
+  font-variant-numeric: tabular-nums;
 }
 .kpi__delta {
   display: inline-flex;
@@ -136,10 +138,11 @@
   width: fit-content;
 }
 
+/* Accent action — a matte copper key. Flat fill, one drop shadow, no glow. */
 .btn-accent {
   background: var(--color-accent);
   color: var(--color-on-accent);
-  border: 1px solid rgba(var(--color-accent-rgb), 0.55);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   padding: 9px 18px;
   font-weight: var(--font-weight-semibold);
@@ -149,16 +152,17 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  box-shadow: 0 2px 8px rgba(var(--color-accent-rgb), 0.25), inset 0 1px 0 rgba(var(--color-overlay-rgb), 0.15);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 16px -8px rgba(0, 0, 0, 0.5);
   transition: all var(--motion-fast);
 }
 .btn-accent:hover:not(:disabled) {
-  background: var(--color-accent-bright);
-  border-color: rgba(var(--color-accent-rgb), 0.55);
+  background: var(--color-accent);
+  filter: brightness(1.08);
+  border-color: transparent;
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(var(--color-accent-rgb), 0.4), inset 0 1px 0 rgba(var(--color-overlay-rgb), 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 10px 22px -10px rgba(0, 0, 0, 0.55);
 }
-.btn-accent:active { transform: translateY(0); }
+.btn-accent:active { transform: translateY(0); filter: brightness(0.98); }
 
 .btn-outline {
   background: rgba(var(--color-overlay-rgb), 0.015);
@@ -373,9 +377,10 @@
   to   { transform: scaleY(1);    opacity: 1; }
 }
 
+/* Matte pulse — brightness only, nothing emits light. */
 @keyframes pulseGlow {
-  0%, 100% { filter: brightness(1) drop-shadow(0 0 0px var(--color-accent)); }
-  50%      { filter: brightness(1.15) drop-shadow(0 0 6px var(--color-accent)); }
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
 }
 
 @keyframes shimmer {
@@ -533,7 +538,6 @@
 .rail__item:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb), 0.15);
 }
 
 .topbar__tab:focus-visible {
@@ -615,7 +619,7 @@
   transform: scale(1.1);
 }
 .rail__item.is-active svg {
-  filter: drop-shadow(0 0 4px var(--color-accent));
+  transform: scale(1.04);
 }
 
 /* === Workspace search ====================================================
@@ -815,7 +819,6 @@
   color: var(--color-accent-bright);
   background: var(--color-accent-soft);
   border: 1px solid var(--color-accent-border);
-  box-shadow: 0 0 18px rgba(var(--color-accent-rgb), 0.22);
   flex-shrink: 0;
 }
 .agentmgr__goal {
@@ -887,7 +890,7 @@
 }
 .agentmgr__agent.is-active {
   border-color: var(--color-accent-border);
-  box-shadow: 0 0 0 1px var(--color-accent-border), var(--glow-accent);
+  box-shadow: var(--glow-accent);
 }
 .agentmgr__agent.is-working {
   border-color: rgba(var(--color-accent-rgb), 0.22);
@@ -1136,75 +1139,14 @@
 
 
 /* === Premium polish (pages & cards) ======================================
-   A coherent "obsidian glass" upgrade: cards get a soft accent spotlight
-   that fades in from the top edge on hover, page titles get a subtle ink
-   gradient, and progress bars carry a slow light sweep. Everything below
-   animates transform/opacity only. */
+   Matte discipline: cards respond to hover with lift and a firmer hairline —
+   never with spotlights, glows or light sweeps. */
 
-/* Accent spotlight bleeding in from the card's top edge on hover. */
 .appcard,
 .kpi,
 .card,
 .feature-card {
   position: relative;
-}
-.appcard::before,
-.kpi::before,
-.card::before,
-.feature-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(
-    480px 110px at 50% 0%,
-    rgba(var(--color-accent-rgb), 0.08),
-    transparent 70%
-  );
-  opacity: 0;
-  transition: opacity var(--motion-medium);
-  pointer-events: none;
-}
-.appcard:hover::before,
-.kpi:hover::before,
-.card:hover::before,
-.feature-card:hover::before {
-  opacity: 1;
-}
-
-/* Page titles: ink fades slightly toward the baseline — premium type feel.
-   -webkit-text-fill-color leaves the inline icon (currentColor) untouched. */
-.apppage__title {
-  background: linear-gradient(
-    180deg,
-    var(--color-text) 50%,
-    color-mix(in srgb, var(--color-text) 68%, transparent)
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* Progress bars carry a slow light sweep while visible. */
-.progress__fill {
-  position: relative;
-  overflow: hidden;
-}
-.progress__fill::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.28),
-    transparent
-  );
-  transform: translateX(-100%);
-  animation: progressSheen 2.4s ease-in-out infinite;
-}
-@keyframes progressSheen {
-  to { transform: translateX(100%); }
 }
 
 /* KPI numbers settle in with a tiny rise when a page mounts. */
