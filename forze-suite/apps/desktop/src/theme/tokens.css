@@ -1,123 +1,126 @@
-﻿/* Forze design tokens (v5, obsidian glass)
-   True-black surfaces, platinum chrome, and a single interaction accent.
-   The default (forze-noir) accent is teal-cyan; alternate themes below swap
-   the accent channel to recolor the whole IDE. No ambient gradients in chrome.
+/* Forze design tokens (v7, graphite monochrome)
+   Terax-style matte black: neutral graphite surfaces, silver ink, and NO
+   accent chroma in the chrome — the "accent" channel is white/silver, so
+   active states read as brightness, exactly like a monochrome instrument.
+   The only color on screen comes from content (terminal ANSI, syntax, git,
+   semantic states). Elevation is pure shadow; nothing glows.
+   Alternate themes below swap the accent channel + canvas tint.
 */
 
 :root,
 :root[data-theme='forze-noir'] {
-  /* Core surfaces */
-  --color-bg: #000000;
-  --color-bg-elevated: #050505;
-  --color-surface: #080808;
-  --color-card: #060606;
-  --color-surface-hover: rgba(var(--color-accent-rgb), 0.07);
-  --color-surface-active: rgba(var(--color-accent-rgb), 0.12);
-  --color-surface-glow: rgba(var(--color-accent-rgb), 0.06);
+  /* Core surfaces — neutral black slabs with clear layer separation: the
+     chrome (rail/titlebar/status) sits darkest, the canvas above it, and
+     panels/cards clearly lighter, like the Terax tab bar over its window. */
+  --color-bg: #0a0a0a;
+  --color-bg-elevated: #141414;
+  --color-surface: #171717;
+  --color-card: #121212;
+  --color-surface-hover: rgba(var(--color-overlay-rgb), 0.05);
+  --color-surface-active: rgba(var(--color-overlay-rgb), 0.09);
+  --color-surface-glow: rgba(var(--color-overlay-rgb), 0.04);
 
-  /* Platinum hairlines */
-  --color-border: rgba(229, 229, 229, 0.08);
-  --color-border-strong: rgba(229, 229, 229, 0.16);
-  --color-border-subtle: rgba(229, 229, 229, 0.045);
-  --color-focus-ring: rgba(var(--color-accent-rgb), 0.55);
+  /* Neutral hairlines */
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-focus-ring: rgba(var(--color-overlay-rgb), 0.55);
 
-  /* Text */
-  --color-text: #f5f5f5;
-  --color-text-muted: #d0d0d0;
-  --color-text-dim: #8f9499;
-  --color-text-disabled: #474747;
-  --color-text-inverted: #000000;
+  /* Ink — silver scale */
+  --color-text: #f2f2f2;
+  --color-text-muted: #b3b3b3;
+  --color-text-dim: #858585;
+  --color-text-disabled: #4a4a4a;
+  --color-text-inverted: #0d0d0d;
 
   /* Neutral overlay channel — the tint used for hovers, hairline highlights and
      scrollbars that sit *on top of* a surface. White on the dark themes; the
-     light theme flips this to black so the same overlays read as shadow. Every
+     light theme flips this to ink so the same overlays read as shadow. Every
      `rgba(var(--color-overlay-rgb), …)` in the chrome reads through this. */
   --color-overlay-rgb: 255, 255, 255;
 
   /* Neutral hover plate shared across the chrome (title bar, window controls,
-     menu items). Reads through --color-overlay-rgb, so it flips correctly on
-     the light theme with no per-theme override. */
+     menu items). */
   --hover-soft: rgba(var(--color-overlay-rgb), 0.06);
 
   /* Form fields */
-  --color-input-bg: rgba(13, 13, 18, 0.6);
-  --color-input-bg-focus: rgba(13, 13, 18, 0.8);
+  --color-input-bg: rgba(20, 20, 20, 0.72);
+  --color-input-bg-focus: rgba(23, 23, 23, 0.94);
 
-  /* Accent — `--color-accent-rgb` is the channel triple every accent surface
-     reads through, so a theme only needs to redefine these four to recolor the
-     whole IDE chrome. `--color-on-accent` is the readable ink on accent fills. */
-  --color-accent-rgb: 0, 212, 255;
-  --color-on-accent: #001014;
-  --color-accent: #00d4ff;
-  --color-accent-bright: #74ecff;
-  --color-accent-soft: rgba(var(--color-accent-rgb), 0.1);
-  --color-accent-border: rgba(var(--color-accent-rgb), 0.34);
-  --color-accent-glow: rgba(var(--color-accent-rgb), 0.2);
+  /* Accent — silver/white. Active states are BRIGHTNESS, not color: the
+     monochrome identity. `--color-on-accent` is the ink on a white fill. */
+  --color-accent-rgb: 229, 229, 229;
+  --color-on-accent: #0d0d0d;
+  --color-accent: #e5e5e5;
+  --color-accent-bright: #ffffff;
+  --color-accent-soft: rgba(var(--color-accent-rgb), 0.08);
+  --color-accent-border: rgba(var(--color-accent-rgb), 0.3);
+  --color-accent-glow: rgba(var(--color-accent-rgb), 0.1);
 
-  /* Semantic */
-  --color-ok: #e5e5e5;
-  --color-ok-soft: rgba(229, 229, 229, 0.08);
-  --color-info: var(--color-accent);
-  --color-info-soft: rgba(var(--color-accent-rgb), 0.1);
-  --color-warn: #d7d7d7;
-  --color-warn-soft: rgba(229, 229, 229, 0.1);
-  --color-danger: #e5645f;
-  --color-danger-soft: rgba(229, 100, 95, 0.12);
+  /* Semantic — functional chroma only, muted to sit on graphite */
+  --color-ok: #a8c08a;
+  --color-ok-soft: rgba(168, 192, 138, 0.1);
+  --color-info: #93accb;
+  --color-info-soft: rgba(147, 172, 203, 0.1);
+  --color-warn: #cbb88a;
+  --color-warn-soft: rgba(203, 184, 138, 0.12);
+  --color-danger: #e0655c;
+  --color-danger-soft: rgba(224, 101, 92, 0.12);
 
-  /* Source-control / diff status. Recognisably VS Code (green/blue/red) but
-     muted to sit inside the matte-black theme. Modified reuses the indigo
-     accent so the single-accent identity still leads. */
-  --color-git-added: #4ec9778c;
-  --color-git-added-strong: #4ec977;
-  --color-git-modified: var(--color-accent);
+  /* Source-control / diff status — recognisably VS Code, desaturated.
+     Modified is steel blue (NOT the accent — the accent is white here). */
+  --color-git-added: #6db98a8c;
+  --color-git-added-strong: #6db98a;
+  --color-git-modified: #93accb;
   --color-git-deleted: var(--color-danger);
 
-  /* Glass */
-  --glass-bg: rgba(0, 0, 0, 0.58);
-  --glass-bg-strong: rgba(5, 5, 5, 0.84);
-  --glass-border: rgba(229, 229, 229, 0.12);
-  --glass-highlight: rgba(229, 229, 229, 0.07);
-  --glass-blur: 34px;
+  /* Glass — matte smoke: blur for legibility, no shine */
+  --glass-bg: rgba(15, 15, 15, 0.68);
+  --glass-bg-strong: rgba(18, 18, 18, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-highlight: rgba(255, 255, 255, 0.04);
+  --glass-blur: 20px;
 
-  /* Flat obsidian canvas; panel shadows provide depth */
+  /* Flat matte canvas; panel shadows provide depth */
   --backdrop-gradient: none;
 
   /* Activity rail */
-  --color-rail-bg: #000000;
-  --color-rail-fg: #737373;
-  --color-rail-fg-hover: #e5e5e5;
-  --color-rail-fg-active: var(--color-accent);
-  --color-rail-indicator: var(--color-accent);
+  --color-rail-bg: #070707;
+  --color-rail-fg: #6e6e6e;
+  --color-rail-fg-hover: #f2f2f2;
+  --color-rail-fg-active: #ffffff;
+  --color-rail-indicator: #ffffff;
 
   /* Sidebar */
-  --color-sidebar-bg: rgba(5, 5, 5, 0.72);
-  --color-sidebar-section-fg: #8c8c8c;
+  --color-sidebar-bg: rgba(14, 14, 14, 0.78);
+  --color-sidebar-section-fg: #7d7d7d;
 
   /* Status bar */
-  --color-status-bg: #000000;
-  --color-status-fg: #a3a3a3;
-  --color-status-border: rgba(229, 229, 229, 0.07);
-  --color-status-accent-fg: var(--color-accent);
+  --color-status-bg: #070707;
+  --color-status-fg: #969696;
+  --color-status-border: rgba(255, 255, 255, 0.06);
+  --color-status-accent-fg: #e5e5e5;
 
   /* Editor / terminal */
-  --color-editor-bg: #000000;
-  --color-editor-gutter: #000000;
-  --color-editor-line: rgba(var(--color-accent-rgb), 0.035);
-  --color-terminal-bg: #000000;
+  --color-editor-bg: #0b0b0b;
+  --color-editor-gutter: #0b0b0b;
+  --color-editor-line: rgba(var(--color-overlay-rgb), 0.035);
+  --color-terminal-bg: #0b0b0b;
 
-  /* Top tab pill */
+  /* Top tab pill — active is a lifted lighter-gray plate with white text,
+     Terax-style; no colored border. */
   --color-tab-bg: transparent;
-  --color-tab-fg: #a3a3a3;
-  --color-tab-bg-active: rgba(229, 229, 229, 0.06);
-  --color-tab-fg-active: #f5f5f5;
-  --color-tab-border-active: rgba(var(--color-accent-rgb), 0.32);
-  --color-tab-modified: var(--color-accent);
+  --color-tab-fg: #969696;
+  --color-tab-bg-active: rgba(var(--color-overlay-rgb), 0.08);
+  --color-tab-fg-active: #ffffff;
+  --color-tab-border-active: rgba(255, 255, 255, 0.14);
+  --color-tab-modified: #93accb;
 
   /* Command bar */
-  --color-command-bg: rgba(0, 0, 0, 0.72);
-  --color-command-fg: #f5f5f5;
-  --color-command-placeholder: #6f6f6f;
-  --color-command-border: rgba(var(--color-accent-rgb), 0.18);
+  --color-command-bg: rgba(10, 10, 10, 0.82);
+  --color-command-fg: #f2f2f2;
+  --color-command-placeholder: #6e6e6e;
+  --color-command-border: rgba(255, 255, 255, 0.12);
 
   /* Sizing */
   --size-titlebar-chrome: 34px; /* VS Code-style menu/window-controls bar */
@@ -129,8 +132,10 @@
   --size-sidebar-default: 280px;
   --size-tab-bar: 40px;
 
-  /* Typography */
-  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  /* Typography — Instrument Sans (clean neutral grotesk) for the UI, bold
+     weights for headlines; JetBrains Mono for code and the uppercase
+     instrument-panel micro-labels (Terax-style section markers). */
+  --font-sans: 'Instrument Sans', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
   --font-size-xs: 11px;
   --font-size-sm: 12px;
@@ -152,195 +157,191 @@
   --motion-slow: 0.38s var(--ease-out);
   --motion-spring: 0.3s var(--ease-spring);
 
-  /* Elevation */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.48);
-  --shadow-md: 0 16px 34px -10px rgba(0, 0, 0, 0.76), 0 1px 0 rgba(229, 229, 229, 0.035) inset;
-  --shadow-lg: 0 34px 90px -18px rgba(0, 0, 0, 0.86), 0 0 42px rgba(var(--color-accent-rgb), 0.055), 0 1px 0 rgba(229, 229, 229, 0.04) inset;
+  /* Elevation — pure umbra. Depth comes from shadow + a faint top hairline;
+     nothing in the chrome emits light. */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 14px 30px -12px rgba(0, 0, 0, 0.72), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --shadow-lg: 0 30px 80px -18px rgba(0, 0, 0, 0.82), 0 1px 0 rgba(255, 255, 255, 0.045) inset;
   --shadow-card:
-    0 1px 0 0 rgba(229, 229, 229, 0.045) inset,
-    0 0 0 1px rgba(229, 229, 229, 0.035) inset,
-    0 10px 30px -14px rgba(0, 0, 0, 0.6),
-    0 2px 6px rgba(0, 0, 0, 0.3);
-  --glow-accent: 0 0 0 1px rgba(var(--color-accent-rgb), 0.26), 0 0 22px rgba(var(--color-accent-rgb), 0.18), 0 18px 48px rgba(0, 0, 0, 0.7);
-  --hairline-top: inset 0 1px 0 rgba(229, 229, 229, 0.05);
+    0 1px 0 0 rgba(255, 255, 255, 0.045) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 10px 28px -14px rgba(0, 0, 0, 0.55),
+    0 2px 6px rgba(0, 0, 0, 0.28);
+  --glow-accent: 0 0 0 1px rgba(var(--color-accent-rgb), 0.35), 0 16px 44px -12px rgba(0, 0, 0, 0.7);
+  --hairline-top: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
-  /* Radii */
+  /* Radii — machined corners */
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 9px;
-  --radius-lg: 13px;
-  --radius-xl: 18px;
-  --radius-card: 16px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-card: 14px;
   --radius-pill: 999px;
 
   color-scheme: dark;
 }
 
 :root[data-theme='forze-midnight'] {
-  --color-bg: #04060f;
-  --color-bg-elevated: #070a16;
-  --color-surface: #0a0e1d;
-  --color-card: #080b17;
-  --color-surface-hover: rgba(var(--color-accent-rgb), 0.08);
-  --color-surface-active: rgba(var(--color-accent-rgb), 0.14);
-  --color-border: rgba(229, 229, 229, 0.08);
-  --color-border-strong: rgba(var(--color-accent-rgb), 0.18);
-  --color-accent: #00d4ff;
-  --color-accent-bright: #8df0ff;
+  --color-bg: #0a0c12;
+  --color-bg-elevated: #12151d;
+  --color-surface: #151821;
+  --color-card: #10131c;
+  --color-border: rgba(222, 228, 240, 0.09);
+  --color-border-strong: rgba(222, 228, 240, 0.17);
+  --color-overlay-rgb: 222, 228, 240;
+  --color-accent-rgb: 122, 162, 247;
+  --color-accent: #7aa2f7;
+  --color-accent-bright: #a3c0ff;
+  --color-on-accent: #081020;
   --color-accent-soft: rgba(var(--color-accent-rgb), 0.11);
   --color-accent-border: rgba(var(--color-accent-rgb), 0.34);
-  --color-rail-bg: #04060f;
-  --color-sidebar-bg: rgba(7, 10, 22, 0.74);
-  --color-editor-bg: #04060f;
-  --color-editor-gutter: #04060f;
-  --color-terminal-bg: #04060f;
-  --color-tab-bg-active: rgba(229, 229, 229, 0.06);
-  --color-command-bg: rgba(4, 6, 15, 0.74);
-  --color-status-bg: #04060f;
+  --color-surface-active: rgba(var(--color-accent-rgb), 0.13);
+  --color-rail-bg: #07090e;
+  --color-rail-fg-active: var(--color-accent);
+  --color-rail-indicator: var(--color-accent);
+  --color-sidebar-bg: rgba(13, 16, 23, 0.78);
+  --color-editor-bg: #0a0c12;
+  --color-editor-gutter: #0a0c12;
+  --color-terminal-bg: #0a0c12;
+  --color-tab-bg-active: rgba(var(--color-overlay-rgb), 0.07);
+  --color-command-bg: rgba(10, 12, 18, 0.82);
+  --color-status-bg: #07090e;
+  --color-status-accent-fg: var(--color-accent);
   --backdrop-gradient: none;
   color-scheme: dark;
 }
 
+/* Graphite — one step softer/lighter than Noir, same monochrome identity. */
 :root[data-theme='forze-graphite'] {
-  --color-bg: #000000;
-  --color-bg-elevated: #060606;
-  --color-surface: #0a0a0a;
-  --color-card: #070707;
-  --color-surface-hover: rgba(229, 229, 229, 0.055);
-  --color-surface-active: rgba(var(--color-accent-rgb), 0.1);
-  --color-border: rgba(229, 229, 229, 0.08);
-  --color-border-strong: rgba(229, 229, 229, 0.16);
-  --color-accent: #00d4ff;
-  --color-accent-bright: #74ecff;
-  --color-accent-soft: rgba(var(--color-accent-rgb), 0.09);
-  --color-accent-border: rgba(var(--color-accent-rgb), 0.28);
-  --color-rail-bg: #000000;
-  --color-sidebar-bg: rgba(6, 6, 6, 0.74);
-  --color-editor-bg: #000000;
-  --color-terminal-bg: #000000;
-  --color-tab-bg-active: rgba(229, 229, 229, 0.055);
-  --color-command-bg: rgba(0, 0, 0, 0.72);
-  --color-status-bg: #000000;
-  --backdrop-gradient: none;
+  --color-bg: #101010;
+  --color-bg-elevated: #191919;
+  --color-surface: #1c1c1c;
+  --color-card: #171717;
+  --color-rail-bg: #0c0c0c;
+  --color-sidebar-bg: rgba(20, 20, 20, 0.78);
+  --color-editor-bg: #111111;
+  --color-editor-gutter: #111111;
+  --color-terminal-bg: #111111;
+  --color-status-bg: #0c0c0c;
+  --color-command-bg: rgba(16, 16, 16, 0.82);
   color-scheme: dark;
 }
 
 /* === Light theme =========================================================
-   The one inverted canvas: white surfaces, dark ink, and a deepened cyan
-   accent that stays legible on white (both as link text and as button fills).
-   Because the chrome reads surfaces, borders, overlays and shadows through
-   tokens, flipping them here re-skins the whole IDE without touching markup. */
+   The monochrome canvas inverted: paper surfaces, graphite ink, and an
+   ink-colored "accent" so active states stay monochrome in daylight too. */
 
 :root[data-theme='forze-daylight'] {
-  /* Core surfaces — app canvas is a soft grey so white cards lift off it */
-  --color-bg: #f4f5f7;
+  /* Core surfaces — neutral paper so white cards lift off it */
+  --color-bg: #f4f4f4;
   --color-bg-elevated: #ffffff;
   --color-surface: #ffffff;
   --color-card: #ffffff;
-  --color-surface-hover: rgba(var(--color-accent-rgb), 0.08);
-  --color-surface-active: rgba(var(--color-accent-rgb), 0.14);
-  --color-surface-glow: rgba(var(--color-accent-rgb), 0.07);
+  --color-surface-hover: rgba(var(--color-overlay-rgb), 0.05);
+  --color-surface-active: rgba(var(--color-overlay-rgb), 0.09);
+  --color-surface-glow: rgba(var(--color-overlay-rgb), 0.04);
 
   /* Ink hairlines */
-  --color-border: rgba(15, 23, 42, 0.12);
-  --color-border-strong: rgba(15, 23, 42, 0.2);
-  --color-border-subtle: rgba(15, 23, 42, 0.07);
-  --color-focus-ring: rgba(var(--color-accent-rgb), 0.5);
+  --color-border: rgba(23, 23, 23, 0.12);
+  --color-border-strong: rgba(23, 23, 23, 0.2);
+  --color-border-subtle: rgba(23, 23, 23, 0.07);
+  --color-focus-ring: rgba(23, 23, 23, 0.45);
 
   /* Text */
-  --color-text: #16191d;
-  --color-text-muted: #41464d;
-  --color-text-dim: #6b7280;
-  --color-text-disabled: #b3b8bf;
+  --color-text: #171717;
+  --color-text-muted: #454545;
+  --color-text-dim: #707070;
+  --color-text-disabled: #b3b3b3;
   --color-text-inverted: #ffffff;
 
-  /* Overlay flips to black so hovers/highlights read as shadow on white */
-  --color-overlay-rgb: 15, 23, 42;
+  /* Overlay flips to ink so hovers/highlights read as shadow on paper */
+  --color-overlay-rgb: 23, 23, 23;
 
   /* Form fields */
   --color-input-bg: #ffffff;
   --color-input-bg-focus: #ffffff;
 
-  /* Accent — deepened cyan: ~5:1 on white as text and as ink-on-fill */
-  --color-accent-rgb: 14, 116, 144;
+  /* Accent — graphite ink: monochrome active states on paper */
+  --color-accent-rgb: 23, 23, 23;
   --color-on-accent: #ffffff;
-  --color-accent: #0e7490;
-  --color-accent-bright: #0891b2;
-  --color-accent-soft: rgba(var(--color-accent-rgb), 0.1);
-  --color-accent-border: rgba(var(--color-accent-rgb), 0.34);
-  --color-accent-glow: rgba(var(--color-accent-rgb), 0.2);
+  --color-accent: #171717;
+  --color-accent-bright: #404040;
+  --color-accent-soft: rgba(var(--color-accent-rgb), 0.07);
+  --color-accent-border: rgba(var(--color-accent-rgb), 0.3);
+  --color-accent-glow: rgba(var(--color-accent-rgb), 0.1);
 
   /* Semantic */
   --color-ok: #15803d;
   --color-ok-soft: rgba(21, 128, 61, 0.12);
-  --color-info: var(--color-accent);
-  --color-info-soft: rgba(var(--color-accent-rgb), 0.1);
-  --color-warn: #b45309;
-  --color-warn-soft: rgba(180, 83, 9, 0.12);
+  --color-info: #1d4ed8;
+  --color-info-soft: rgba(29, 78, 216, 0.08);
+  --color-warn: #a16207;
+  --color-warn-soft: rgba(161, 98, 7, 0.12);
   --color-danger: #dc2626;
   --color-danger-soft: rgba(220, 38, 38, 0.1);
 
   /* Source-control / diff status */
   --color-git-added: #1f9d5766;
   --color-git-added-strong: #15803d;
-  --color-git-modified: var(--color-accent);
+  --color-git-modified: #1d4ed8;
   --color-git-deleted: var(--color-danger);
 
   /* Glass */
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-bg-strong: rgba(255, 255, 255, 0.9);
-  --glass-border: rgba(15, 23, 42, 0.1);
-  --glass-highlight: rgba(255, 255, 255, 0.7);
-  --glass-blur: 30px;
+  --glass-bg: rgba(255, 255, 255, 0.74);
+  --glass-bg-strong: rgba(255, 255, 255, 0.92);
+  --glass-border: rgba(23, 23, 23, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.6);
+  --glass-blur: 20px;
 
   --backdrop-gradient: none;
 
   /* Activity rail */
-  --color-rail-bg: #ffffff;
-  --color-rail-fg: #6b7280;
-  --color-rail-fg-hover: #16191d;
-  --color-rail-fg-active: var(--color-accent);
-  --color-rail-indicator: var(--color-accent);
+  --color-rail-bg: #fafafa;
+  --color-rail-fg: #707070;
+  --color-rail-fg-hover: #171717;
+  --color-rail-fg-active: #171717;
+  --color-rail-indicator: #171717;
 
   /* Sidebar */
-  --color-sidebar-bg: rgba(248, 249, 251, 0.82);
-  --color-sidebar-section-fg: #6b7280;
+  --color-sidebar-bg: rgba(249, 249, 249, 0.85);
+  --color-sidebar-section-fg: #707070;
 
   /* Status bar */
-  --color-status-bg: #ffffff;
-  --color-status-fg: #41464d;
-  --color-status-border: rgba(15, 23, 42, 0.1);
-  --color-status-accent-fg: var(--color-accent);
+  --color-status-bg: #fafafa;
+  --color-status-fg: #454545;
+  --color-status-border: rgba(23, 23, 23, 0.1);
+  --color-status-accent-fg: #171717;
 
   /* Editor / terminal */
   --color-editor-bg: #ffffff;
   --color-editor-gutter: #ffffff;
-  --color-editor-line: rgba(var(--color-accent-rgb), 0.06);
+  --color-editor-line: rgba(23, 23, 23, 0.045);
   --color-terminal-bg: #ffffff;
 
   /* Top tab pill */
   --color-tab-bg: transparent;
-  --color-tab-fg: #6b7280;
-  --color-tab-bg-active: rgba(15, 23, 42, 0.05);
-  --color-tab-fg-active: #16191d;
-  --color-tab-border-active: rgba(var(--color-accent-rgb), 0.34);
-  --color-tab-modified: var(--color-accent);
+  --color-tab-fg: #707070;
+  --color-tab-bg-active: rgba(23, 23, 23, 0.06);
+  --color-tab-fg-active: #171717;
+  --color-tab-border-active: rgba(23, 23, 23, 0.14);
+  --color-tab-modified: #1d4ed8;
 
   /* Command bar */
-  --color-command-bg: rgba(255, 255, 255, 0.82);
-  --color-command-fg: #16191d;
-  --color-command-placeholder: #9ca3af;
-  --color-command-border: rgba(var(--color-accent-rgb), 0.2);
+  --color-command-bg: rgba(255, 255, 255, 0.85);
+  --color-command-fg: #171717;
+  --color-command-placeholder: #9c9c9c;
+  --color-command-border: rgba(23, 23, 23, 0.14);
 
-  /* Elevation — soft dark drops, no light insets */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.1);
-  --shadow-md: 0 16px 34px -12px rgba(15, 23, 42, 0.16), 0 1px 0 rgba(15, 23, 42, 0.04) inset;
-  --shadow-lg: 0 34px 90px -20px rgba(15, 23, 42, 0.22), 0 0 42px rgba(var(--color-accent-rgb), 0.06);
+  /* Elevation — soft ink drops, no light insets */
+  --shadow-sm: 0 1px 2px rgba(23, 23, 23, 0.1);
+  --shadow-md: 0 14px 30px -12px rgba(23, 23, 23, 0.16), 0 1px 0 rgba(23, 23, 23, 0.04) inset;
+  --shadow-lg: 0 30px 80px -20px rgba(23, 23, 23, 0.22);
   --shadow-card:
-    0 0 0 1px rgba(15, 23, 42, 0.06) inset,
-    0 10px 30px -16px rgba(15, 23, 42, 0.18),
-    0 2px 6px rgba(15, 23, 42, 0.06);
-  --glow-accent: 0 0 0 1px rgba(var(--color-accent-rgb), 0.3), 0 0 22px rgba(var(--color-accent-rgb), 0.14), 0 18px 48px rgba(15, 23, 42, 0.16);
+    0 0 0 1px rgba(23, 23, 23, 0.06) inset,
+    0 10px 28px -16px rgba(23, 23, 23, 0.18),
+    0 2px 6px rgba(23, 23, 23, 0.06);
+  --glow-accent: 0 0 0 1px rgba(var(--color-accent-rgb), 0.35), 0 16px 44px -12px rgba(23, 23, 23, 0.18);
   --hairline-top: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
   color-scheme: light;
@@ -348,115 +349,139 @@
 
 /* === Accent-varied themes ================================================
    Each swaps the accent channel (`--color-accent-rgb`) plus the accent hexes
-   and the ink on accent fills — and now also tints the whole canvas with a
-   very dark shade of that accent so the background moves away from pure black.
-   The surface tokens below all read into the chrome (bg/editor/terminal/rail/
-   status), so these few lines recolor the entire IDE, canvas included. */
+   and the ink on accent fills — and tints the matte canvas with a very dark
+   shade of that accent. The surface tokens below all read into the chrome
+   (bg/editor/terminal/rail/status), so these few lines recolor the entire
+   IDE, canvas included. */
 
 :root[data-theme='forze-indigo'] {
-  --color-accent-rgb: 99, 102, 241;
-  --color-accent: #6366f1;
-  --color-accent-bright: #9b9dff;
-  --color-on-accent: #f4f5ff;
-  --color-bg: #07070e;
-  --color-bg-elevated: #0b0b16;
-  --color-surface: #0e0e1b;
-  --color-card: #0c0c17;
-  --color-rail-bg: #07070e;
-  --color-sidebar-bg: rgba(11, 11, 22, 0.74);
-  --color-status-bg: #07070e;
-  --color-editor-bg: #07070e;
-  --color-editor-gutter: #07070e;
-  --color-terminal-bg: #07070e;
+  --color-accent-rgb: 129, 140, 248;
+  --color-accent: #818cf8;
+  --color-accent-bright: #a5b0ff;
+  --color-on-accent: #0d0e24;
+  --color-surface-active: rgba(var(--color-accent-rgb), 0.12);
+  --color-rail-fg-active: var(--color-accent);
+  --color-rail-indicator: var(--color-accent);
+  --color-status-accent-fg: var(--color-accent);
+  --color-bg: #0e0e15;
+  --color-bg-elevated: #14141d;
+  --color-surface: #171720;
+  --color-card: #13131c;
+  --color-rail-bg: #0b0b11;
+  --color-sidebar-bg: rgba(17, 17, 26, 0.78);
+  --color-status-bg: #0b0b11;
+  --color-editor-bg: #0e0e15;
+  --color-editor-gutter: #0e0e15;
+  --color-terminal-bg: #0e0e15;
   color-scheme: dark;
 }
 
 :root[data-theme='forze-emerald'] {
-  --color-accent-rgb: 16, 185, 129;
-  --color-accent: #10b981;
-  --color-accent-bright: #4ee2b5;
+  --color-accent-rgb: 52, 178, 132;
+  --color-accent: #34b284;
+  --color-accent-bright: #5fd3a8;
   --color-on-accent: #03140e;
-  --color-bg: #040b08;
-  --color-bg-elevated: #071310;
-  --color-surface: #0a1814;
-  --color-card: #081511;
-  --color-rail-bg: #040b08;
-  --color-sidebar-bg: rgba(7, 19, 16, 0.74);
-  --color-status-bg: #040b08;
-  --color-editor-bg: #040b08;
-  --color-editor-gutter: #040b08;
-  --color-terminal-bg: #040b08;
+  --color-surface-active: rgba(var(--color-accent-rgb), 0.12);
+  --color-rail-fg-active: var(--color-accent);
+  --color-rail-indicator: var(--color-accent);
+  --color-status-accent-fg: var(--color-accent);
+  --color-bg: #0b100e;
+  --color-bg-elevated: #111714;
+  --color-surface: #141a17;
+  --color-card: #101613;
+  --color-rail-bg: #080d0b;
+  --color-sidebar-bg: rgba(15, 21, 18, 0.78);
+  --color-status-bg: #080d0b;
+  --color-editor-bg: #0b100e;
+  --color-editor-gutter: #0b100e;
+  --color-terminal-bg: #0b100e;
   color-scheme: dark;
 }
 
 :root[data-theme='forze-amber'] {
-  --color-accent-rgb: 245, 166, 35;
-  --color-accent: #f5a623;
-  --color-accent-bright: #ffc861;
+  --color-accent-rgb: 227, 160, 62;
+  --color-accent: #e3a03e;
+  --color-accent-bright: #f5bd6c;
   --color-on-accent: #1a1204;
-  --color-bg: #0d0a04;
-  --color-bg-elevated: #14100a;
-  --color-surface: #1a150c;
-  --color-card: #15110a;
-  --color-rail-bg: #0d0a04;
-  --color-sidebar-bg: rgba(20, 16, 10, 0.74);
-  --color-status-bg: #0d0a04;
-  --color-editor-bg: #0d0a04;
-  --color-editor-gutter: #0d0a04;
-  --color-terminal-bg: #0d0a04;
+  --color-surface-active: rgba(var(--color-accent-rgb), 0.12);
+  --color-rail-fg-active: var(--color-accent);
+  --color-rail-indicator: var(--color-accent);
+  --color-status-accent-fg: var(--color-accent);
+  --color-bg: #100e0a;
+  --color-bg-elevated: #171410;
+  --color-surface: #1a1712;
+  --color-card: #16130e;
+  --color-rail-bg: #0d0b07;
+  --color-sidebar-bg: rgba(21, 19, 13, 0.78);
+  --color-status-bg: #0d0b07;
+  --color-editor-bg: #100e0a;
+  --color-editor-gutter: #100e0a;
+  --color-terminal-bg: #100e0a;
   color-scheme: dark;
 }
 
 :root[data-theme='forze-rose'] {
-  --color-accent-rgb: 251, 113, 133;
-  --color-accent: #fb7185;
-  --color-accent-bright: #ff9fb0;
+  --color-accent-rgb: 244, 129, 148;
+  --color-accent: #f48194;
+  --color-accent-bright: #ffa8b7;
   --color-on-accent: #1c060c;
-  --color-bg: #0e0709;
-  --color-bg-elevated: #170b0f;
-  --color-surface: #1d0f13;
-  --color-card: #180c10;
-  --color-rail-bg: #0e0709;
-  --color-sidebar-bg: rgba(23, 11, 15, 0.74);
-  --color-status-bg: #0e0709;
-  --color-editor-bg: #0e0709;
-  --color-editor-gutter: #0e0709;
-  --color-terminal-bg: #0e0709;
+  --color-surface-active: rgba(var(--color-accent-rgb), 0.12);
+  --color-rail-fg-active: var(--color-accent);
+  --color-rail-indicator: var(--color-accent);
+  --color-status-accent-fg: var(--color-accent);
+  --color-bg: #110d0e;
+  --color-bg-elevated: #181214;
+  --color-surface: #1b1517;
+  --color-card: #181214;
+  --color-rail-bg: #0e0a0b;
+  --color-sidebar-bg: rgba(23, 17, 19, 0.78);
+  --color-status-bg: #0e0a0b;
+  --color-editor-bg: #110d0e;
+  --color-editor-gutter: #110d0e;
+  --color-terminal-bg: #110d0e;
   color-scheme: dark;
 }
 
 :root[data-theme='forze-violet'] {
-  --color-accent-rgb: 168, 85, 247;
-  --color-accent: #a855f7;
-  --color-accent-bright: #c98cff;
-  --color-on-accent: #f9f4ff;
-  --color-bg: #0a060e;
-  --color-bg-elevated: #110a18;
-  --color-surface: #160e1f;
-  --color-card: #120b1a;
-  --color-rail-bg: #0a060e;
-  --color-sidebar-bg: rgba(17, 10, 24, 0.74);
-  --color-status-bg: #0a060e;
-  --color-editor-bg: #0a060e;
-  --color-editor-gutter: #0a060e;
-  --color-terminal-bg: #0a060e;
+  --color-accent-rgb: 178, 121, 240;
+  --color-accent: #b279f0;
+  --color-accent-bright: #cda0ff;
+  --color-on-accent: #180b26;
+  --color-surface-active: rgba(var(--color-accent-rgb), 0.12);
+  --color-rail-fg-active: var(--color-accent);
+  --color-rail-indicator: var(--color-accent);
+  --color-status-accent-fg: var(--color-accent);
+  --color-bg: #100d14;
+  --color-bg-elevated: #16121b;
+  --color-surface: #19151e;
+  --color-card: #16121a;
+  --color-rail-bg: #0d0a10;
+  --color-sidebar-bg: rgba(21, 17, 25, 0.78);
+  --color-status-bg: #0d0a10;
+  --color-editor-bg: #100d14;
+  --color-editor-gutter: #100d14;
+  --color-terminal-bg: #100d14;
   color-scheme: dark;
 }
 
 :root[data-theme='forze-crimson'] {
-  --color-accent-rgb: 244, 63, 94;
-  --color-accent: #f43f5e;
-  --color-accent-bright: #ff7185;
-  --color-on-accent: #fff1f3;
-  --color-bg: #0e0608;
-  --color-bg-elevated: #170a0d;
-  --color-surface: #1d0d11;
-  --color-card: #180a0e;
-  --color-rail-bg: #0e0608;
-  --color-sidebar-bg: rgba(23, 10, 13, 0.74);
-  --color-status-bg: #0e0608;
-  --color-editor-bg: #0e0608;
-  --color-editor-gutter: #0e0608;
-  --color-terminal-bg: #0e0608;
+  --color-accent-rgb: 235, 94, 113;
+  --color-accent: #eb5e71;
+  --color-accent-bright: #ff8a99;
+  --color-on-accent: #1e070b;
+  --color-surface-active: rgba(var(--color-accent-rgb), 0.12);
+  --color-rail-fg-active: var(--color-accent);
+  --color-rail-indicator: var(--color-accent);
+  --color-status-accent-fg: var(--color-accent);
+  --color-bg: #120d0e;
+  --color-bg-elevated: #181213;
+  --color-surface: #1b1516;
+  --color-card: #181213;
+  --color-rail-bg: #0f0a0b;
+  --color-sidebar-bg: rgba(23, 17, 18, 0.78);
+  --color-status-bg: #0f0a0b;
+  --color-editor-bg: #120d0e;
+  --color-editor-gutter: #120d0e;
+  --color-terminal-bg: #120d0e;
   color-scheme: dark;
 }
