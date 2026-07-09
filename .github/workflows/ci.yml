@@ -1,0 +1,53 @@
+name: CI
+
+# Guards main so it can never silently rot between releases. A release is only
+# cut from a green tree (scripts/release.mjs runs the same checks locally before
+# tagging), but this catches anything that lands on main without a release —
+# lint, unit tests, typecheck, and the production Vite build. No Rust/Tauri here
+# on purpose: the native build is heavy and is fully exercised by release.yml.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch/PR supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    # The pnpm workspace lives under forze-suite, not the repo root.
+    defaults:
+      run:
+        working-directory: forze-suite
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: forze-suite/pnpm-lock.yaml
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter @forze/desktop run lint
+
+      - name: Unit tests
+        run: pnpm --filter @forze/desktop run test
+
+      # `build` = `tsc --noEmit && vite build` — this is the exact command
+      # tauri's beforeBuildCommand runs, so a green build here means the release
+      # bundle will compile too. Typecheck + bundle in one step.
+      - name: Typecheck + build
+        run: pnpm --filter @forze/desktop run build
