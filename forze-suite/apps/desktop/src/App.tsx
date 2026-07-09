@@ -534,7 +534,9 @@ export default function App(): JSX.Element {
             <Panel order={2} id="main" minSize={30}>
               <PanelGroup direction="vertical" autoSaveId="forze.workbench.vertical">
                 <Panel defaultSize={70} minSize={20} order={1} id="editor">
-                  <EditorArea registerActiveEditor={registerActiveEditor} />
+                  <ErrorBoundary scope="Editor area">
+                    <EditorArea registerActiveEditor={registerActiveEditor} />
+                  </ErrorBoundary>
                 </Panel>
                 {bottomPanelVisible && (
                   <>
