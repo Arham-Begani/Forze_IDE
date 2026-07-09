@@ -12,11 +12,16 @@
 //   node scripts/release.mjs major      #         0.1.0 -> 1.0.0
 //   node scripts/release.mjs 0.4.2      # explicit version
 //   node scripts/release.mjs patch --dry # print the plan, change/commit/push nothing
+//   node scripts/release.mjs patch --skip-checks # bypass the preflight (NOT recommended)
 //
 // What it does:
-//   1. Bumps "version" in tauri.conf.json AND apps/desktop/package.json (in sync).
-//   2. Commits ALL current changes as "chore(release): vX.Y.Z".
-//   3. Tags vX.Y.Z and pushes the branch + tag.
+//   1. PREFLIGHT: lint + test + build the desktop app. A tagged release is
+//      auto-built and auto-SHIPPED to every install via the updater, so a broken
+//      change must be caught HERE, before the tag exists — not after users have
+//      pulled it. Refuses to continue if any check fails (override: --skip-checks).
+//   2. Bumps "version" in tauri.conf.json AND apps/desktop/package.json (in sync).
+//   3. Commits ALL current changes as "chore(release): vX.Y.Z".
+//   4. Tags vX.Y.Z and pushes the branch + tag.
 //   CI (.github/workflows/release.yml) then builds, signs, and publishes the
 //   manifest. See AGENTS.md for the full picture.
 
@@ -31,7 +36,31 @@ const PKG = join(repoRoot, 'forze-suite/apps/desktop/package.json')
 
 const args = process.argv.slice(2)
 const dry = args.includes('--dry') || args.includes('--dry-run')
+const skipChecks = args.includes('--skip-checks') || args.includes('--no-verify')
 const kind = args.find((a) => !a.startsWith('-')) || 'patch'
+
+// Preflight gate. Runs the exact commands the release build depends on
+// (tauri's beforeBuildCommand IS `pnpm build` = tsc --noEmit && vite build) plus
+// lint + unit tests. Any non-zero exit aborts BEFORE anything is bumped,
+// committed, tagged, or pushed — so a red tree can never become a live release.
+function runPreflight() {
+  const steps = [
+    ['lint', 'pnpm --filter @forze/desktop run lint'],
+    ['test', 'pnpm --filter @forze/desktop run test'],
+    ['build', 'pnpm --filter @forze/desktop run build'],
+  ]
+  for (const [name, cmd] of steps) {
+    console.log(`\n▶ preflight: ${name}  (${cmd})`)
+    try {
+      execSync(cmd, { cwd: repoRoot, stdio: 'inherit' })
+    } catch {
+      console.error(`\n✗ preflight "${name}" failed — refusing to cut a release.`)
+      console.error('  Fix it, or (only if you truly must) re-run with --skip-checks.')
+      process.exit(1)
+    }
+  }
+  console.log('\n✓ preflight passed — lint, tests, and build are green.')
+}
 
 function bump(cur, how) {
   const m = cur.match(/^(\d+)\.(\d+)\.(\d+)$/)
@@ -82,8 +111,17 @@ const branch = git('rev-parse --abbrev-ref HEAD')
 console.log(`Release ${current} -> ${next}  (tag ${tag}, branch ${branch})`)
 
 if (dry) {
+  console.log(`[dry run] would ${skipChecks ? 'SKIP' : 'run'} preflight, then bump + commit + tag + push.`)
   console.log('[dry run] no files changed, nothing committed or pushed.')
   process.exit(0)
+}
+
+// Gate the release on a green tree. Do this FIRST, while the working tree is
+// still untouched, so a failure leaves nothing half-bumped to clean up.
+if (skipChecks) {
+  console.warn('⚠ --skip-checks: cutting a release WITHOUT lint/test/build verification.')
+} else {
+  runPreflight()
 }
 
 setVersion(TAURI_CONF, next)
