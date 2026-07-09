@@ -72,14 +72,42 @@ export const THEMES: { id: ThemeId; label: string; description: string }[] = [
   },
 ];
 
+export const DEFAULT_THEME: ThemeId = 'forze-noir';
+
+// The set of themes this build actually ships, derived from THEMES so it can
+// never drift from what Settings renders. Used to reject stale/unknown ids.
+const VALID_THEME_IDS = new Set<string>(THEMES.map((t) => t.id));
+
+export function isThemeId(value: unknown): value is ThemeId {
+  return typeof value === 'string' && VALID_THEME_IDS.has(value);
+}
+
+/**
+ * Coerce any value to a known theme id, falling back to the default. A snapshot
+ * written by an older/newer build (or a hand-edited localStorage) can name a
+ * theme this build no longer has — applying it would set a `data-theme` with no
+ * matching token block. This keeps the app on a real theme instead.
+ */
+export function sanitizeThemeId(value: unknown): ThemeId {
+  return isThemeId(value) ? value : DEFAULT_THEME;
+}
+
 export const useTheme = create<ThemeState>()(
   persist(
     (set) => ({
-      theme: 'forze-noir',
-      setTheme: (theme) => set({ theme }),
+      theme: DEFAULT_THEME,
+      setTheme: (theme) => set({ theme: sanitizeThemeId(theme) }),
     }),
     {
       name: 'forze.theme.v2',
+      // Self-heal on rehydrate: keep the current state's actions, layer the
+      // persisted values on top, then force `theme` through the sanitizer so a
+      // removed/renamed theme can never reach the DOM.
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<ThemeState> | undefined),
+        theme: sanitizeThemeId((persisted as Partial<ThemeState> | undefined)?.theme),
+      }),
     },
   ),
 );
@@ -87,6 +115,6 @@ export const useTheme = create<ThemeState>()(
 export function useApplyTheme(): void {
   const theme = useTheme((s) => s.theme);
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.theme = sanitizeThemeId(theme);
   }, [theme]);
 }
