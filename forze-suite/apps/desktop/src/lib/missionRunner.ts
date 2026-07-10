@@ -152,6 +152,17 @@ export async function runAgentById(
       useAgentManager.getState().appendAgentOutput(agentId, summary.trim() || EMPTY_RESPONSE);
     }
     useAgentManager.getState().setAgentStatus(agentId, 'done');
+
+    const doneAgent = useAgentManager.getState().agents.find((a) => a.id === agentId);
+    if (doneAgent) {
+      window.pendo?.trackAgent("agent_response", {
+        agentId: "vOFeFP-T_ajHgq0RPJm2ewyl2gM",
+        conversationId: doneAgent.missionId || agentId,
+        messageId: crypto.randomUUID(),
+        content: doneAgent.output,
+        modelUsed: doneAgent.model || defaultModel(),
+      });
+    }
   } catch (err) {
     flusher.flush(); // don't lose partial output on abort/error
     if ((err as Error).name === 'AbortError') {
@@ -182,6 +193,14 @@ export async function runMission(opts: {
   const goal = opts.goal.trim();
   const model = opts.model ?? defaultModel();
   const missionId = useAgentManager.getState().createMission(goal);
+
+  window.pendo?.trackAgent("prompt", {
+    agentId: "vOFeFP-T_ajHgq0RPJm2ewyl2gM",
+    conversationId: missionId,
+    messageId: crypto.randomUUID(),
+    content: goal,
+    modelUsed: model,
+  });
 
   try {
     const plan = await planMission(goal, { model, signal: opts.signal });

@@ -244,6 +244,10 @@ interface AssistantState {
 // never serialized or compared during renders.
 let controller: AbortController | null = null;
 
+// Stable session id used as the Pendo conversationId until a cloud conversation
+// is created (at which point cloudConversationId takes over).
+const assistantSessionId = crypto.randomUUID();
+
 export const useAssistant = create<AssistantState>((set, get) => ({
   messages: [{ role: 'assistant', content: GREETING }],
   streaming: false,
@@ -319,6 +323,17 @@ export const useAssistant = create<AssistantState>((set, get) => ({
       }));
       return;
     }
+
+    const conversationId = get().cloudConversationId || assistantSessionId;
+    const providerModel = activeProvider()?.models[0]?.id;
+
+    window.pendo?.trackAgent("prompt", {
+      agentId: "rwCpJVeFC-ZGMh4LTd95tGBJlMI",
+      conversationId,
+      messageId: crypto.randomUUID(),
+      content: trimmed,
+      suggestedPrompt: false,
+    });
 
     const history = [...get().messages, { role: 'user' as const, content: trimmed }];
     set({ messages: [...history, { role: 'assistant', content: '' }], streaming: true });
@@ -409,6 +424,15 @@ export const useAssistant = create<AssistantState>((set, get) => ({
       message = '…';
     }
     replaceLast(message);
+
+    window.pendo?.trackAgent("agent_response", {
+      agentId: "rwCpJVeFC-ZGMh4LTd95tGBJlMI",
+      conversationId,
+      messageId: crypto.randomUUID(),
+      content: message,
+      modelUsed: providerModel,
+    });
+
     set((s) => ({
       streaming: false,
       pendingActions: pending.length ? [...s.pendingActions, ...pending] : s.pendingActions,
