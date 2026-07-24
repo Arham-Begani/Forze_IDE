@@ -30,6 +30,8 @@ export type UsageModule =
   | 'build-in-public'
   | 'image'
   | 'scheduler'
+  | 'vibe-stations'
+  | 'digest'
   | 'other';
 
 /** Human labels for the usage breakdown in Settings. */
@@ -41,10 +43,12 @@ export const MODULE_LABELS: Record<UsageModule, string> = {
   'build-in-public': 'Build in Public',
   image: 'Image generation',
   scheduler: 'Autopilot scheduler',
+  'vibe-stations': 'Vibe Stations (est.)',
+  digest: 'Catch-up digest',
   other: 'Other',
 };
 
-/** One completed provider call, kept for rate/budget accounting. */
+/** One completed provider call, kept for rate/budget accounting + cost. */
 export interface UsageEvent {
   /** epoch ms when the call completed. */
   at: number;
@@ -53,6 +57,12 @@ export interface UsageEvent {
   module: UsageModule;
   /** total tokens billed (input + output); 0 when the provider reports none. */
   tokens: number;
+  /** Model id the call used, for accurate per-model cost pricing. */
+  model?: string;
+  /** Input tokens, when the provider reports them (enables exact cost). */
+  inputTokens?: number;
+  /** Output tokens, when the provider reports them. */
+  outputTokens?: number;
 }
 
 export interface UsageLimits {
@@ -179,8 +189,14 @@ interface UsageState {
   resetToday: () => void;
   /** Non-reactive guard called before a provider request fires. */
   checkUsage: () => LimitVerdict;
-  /** Non-reactive: record a completed request's real cost. */
-  recordUsage: (provider: string, module: UsageModule, tokens: number) => void;
+  /** Non-reactive: record a completed request's real cost. `meta` carries the
+   *  model + input/output token split so the Burn Meter can price it accurately. */
+  recordUsage: (
+    provider: string,
+    module: UsageModule,
+    tokens: number,
+    meta?: { model?: string; inputTokens?: number; outputTokens?: number },
+  ) => void;
 }
 
 export const useUsageLimits = create<UsageState>()(
@@ -199,13 +215,16 @@ export const useUsageLimits = create<UsageState>()(
 
       checkUsage: () => evaluate(get().limits, get().events, Date.now()),
 
-      recordUsage: (provider, module, tokens) => {
+      recordUsage: (provider, module, tokens, meta) => {
         const now = Date.now();
         const event: UsageEvent = {
           at: now,
           provider,
           module,
           tokens: Number.isFinite(tokens) && tokens > 0 ? Math.round(tokens) : 0,
+          model: meta?.model,
+          inputTokens: meta?.inputTokens,
+          outputTokens: meta?.outputTokens,
         };
         // Keep the log bounded: drop anything older than a day, then cap length.
         const cutoff = now - DAY_MS;
