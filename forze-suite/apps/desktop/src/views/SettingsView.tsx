@@ -33,6 +33,7 @@ import {
   summarize,
   MODULE_LABELS,
 } from '../workbench/usageLimitsStore';
+import { costSummary, formatUsd } from '../lib/pricing';
 import { supabase } from '../lib/supabase';
 import { verifyToken } from '../lib/vercel';
 import ToggleSwitch from '../shell/ToggleSwitch';
@@ -291,6 +292,8 @@ function UsageLimitsCard(): JSX.Element {
   }, []);
 
   const snap = summarize(events, Date.now());
+  const costSnap = costSummary(events, Date.now());
+  const costByModule = new Map(costSnap.byModule.map((m) => [m.module, m.cost]));
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -303,7 +306,8 @@ function UsageLimitsCard(): JSX.Element {
         the one the Assistant and every other module (Agent Manager, Commit Guard,
         deploy heal, Build in Public, image generation) use when you haven&rsquo;t
         added your own. Bring your own Gemini or Claude key and that usage is
-        unlimited and untracked. Stored locally.
+        <strong> unlimited</strong> — but still metered below, so the estimated
+        spend is always visible (never blocked). Stored locally.
       </p>
 
       <div
@@ -390,6 +394,17 @@ function UsageLimitsCard(): JSX.Element {
 
         <UsageMeter label="Requests" used={snap.requestsToday} limit={limits.requestsPerDay} />
         <UsageMeter label="Tokens" used={snap.tokensToday} limit={limits.tokensPerDay} compact />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            fontSize: 12,
+          }}
+        >
+          <span className="dim">Estimated spend (all keys)</span>
+          <strong>{formatUsd(costSnap.costToday)}</strong>
+        </div>
         <p className="dim" style={{ fontSize: 11, margin: 0 }}>
           Last minute: {snap.requestsLastMinute}
           {limits.requestsPerMinute > 0 ? ` / ${limits.requestsPerMinute}` : ''}
@@ -409,7 +424,8 @@ function UsageLimitsCard(): JSX.Element {
               >
                 <span>{MODULE_LABELS[m.module]}</span>
                 <span className="dim">
-                  {m.requests} req · {formatCount(m.tokens)} tok
+                  {m.requests} req · {formatCount(m.tokens)} tok ·{' '}
+                  {formatUsd(costByModule.get(m.module) ?? 0)}
                 </span>
               </div>
             ))}
