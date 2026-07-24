@@ -187,6 +187,26 @@ export async function openFile(filePath: string): Promise<void> {
   await ensureFileLoaded(filePath);
 }
 
+/**
+ * Open a read-only unified diff for a repo-relative path as an editor tab. Used
+ * by the Source Control panel — clicking a tracked change shows what changed
+ * (VS Code opens a diff editor on click) rather than the plain file. `relPath`
+ * is forward-slashed and relative to the workspace root.
+ */
+export function openDiff(relPath: string, staged: boolean): void {
+  const workbench = useWorkbench.getState();
+  const id = `diff:${staged ? 'staged:' : ''}${relPath}`;
+  const name = relPath.split('/').pop() ?? relPath;
+  workbench.openTab({
+    id,
+    title: `${name} (diff)`,
+    filePath: null,
+    language: 'diff',
+    isDirty: false,
+    diff: { relPath, staged },
+  });
+}
+
 /** Save the active editor tab to disk. */
 export async function saveActiveTab(currentValue: string | null): Promise<void> {
   const workbench = useWorkbench.getState();
