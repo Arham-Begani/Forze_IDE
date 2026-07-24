@@ -33,7 +33,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 21
+          # Node 22 (not 21): the unit tests transitively construct a Supabase
+          # client, whose createClient() throws without a global `WebSocket`.
+          # Node 21 only exposes it behind --experimental-websocket; Node 22 (LTS)
+          # enables it by default, so the tests run as they do locally.
+          node-version: 22
           cache: pnpm
           cache-dependency-path: forze-suite/pnpm-lock.yaml
 
