@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { basename } from '../lib/fs';
+import BurnChip from './BurnChip';
 
 interface StatusBarProps {
   workspaceRoot: string | null;
@@ -109,6 +110,8 @@ export default function StatusBar({
         <Megaphone size={11} strokeWidth={1.8} />
         {scheduledPostsCount}
       </button>
+
+      <BurnChip />
 
       <button
         type="button"
