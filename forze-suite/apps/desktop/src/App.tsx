@@ -35,6 +35,7 @@ import { useBipSchedule } from './workbench/bipScheduleStore';
 import { startBipScheduler } from './workbench/bipScheduler';
 import { startPromptScheduler } from './workbench/promptScheduler';
 import { startTeamSync } from './workbench/teamSync';
+import { startCatchUp } from './workbench/catchUp';
 import { computeSurvivalScore } from './workbench/survivalScore';
 import { useKeybindings, keybindingHint } from './workbench/keybindings';
 import { zoomIn, zoomOut, zoomReset } from './workbench/zoom';
@@ -142,6 +143,23 @@ export default function App(): JSX.Element {
       stop = startPromptScheduler();
     } catch (err) {
       console.warn('[forze] prompt scheduler failed to start', err);
+    }
+    return () => {
+      try {
+        stop();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // "While you were away" — brief the founder on refocus after being idle.
+    let stop = () => undefined as void;
+    try {
+      stop = startCatchUp();
+    } catch (err) {
+      console.warn('[forze] catch-up digest failed to start', err);
     }
     return () => {
       try {
