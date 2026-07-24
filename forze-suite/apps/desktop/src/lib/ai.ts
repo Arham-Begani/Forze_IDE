@@ -101,14 +101,15 @@ export async function streamConversation(
     if (chunk.done) break;
   }
 
-  // Meter the real cost against the daily/per-minute budgets — built-in key only.
-  if (onBuiltInKey) {
-    limiter.recordUsage(
-      provider.id,
-      options.module ?? 'other',
-      (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
-    );
-  }
+  // Meter EVERY call so the Burn Meter can show real spend — including BYOK
+  // (Claude, or the user's own Gemini key), which used to be invisible. Only the
+  // built-in key is *blocked* by the budget above; BYOK is unlimited, just seen.
+  limiter.recordUsage(
+    provider.id,
+    options.module ?? 'other',
+    (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
+    { model, inputTokens: usage?.inputTokens, outputTokens: usage?.outputTokens },
+  );
   return out.trim();
 }
 
@@ -194,8 +195,9 @@ export async function generateImage(
     throw new Error('The model returned no image. Try a more descriptive prompt.');
   }
   const mimeType = img.mimeType || 'image/png';
-  // Gemini's image endpoint reports no token usage; count it as one request so
-  // the per-minute/per-day request budgets still apply (built-in key only).
-  if (onBuiltInKey) limiter.recordUsage(DEFAULT_PROVIDER_ID, 'image', 0);
+  // Gemini's image endpoint reports no token usage; record it as one request so
+  // the request budgets still apply (built-in key) and the Burn Meter can price
+  // it at a flat per-image estimate (any key).
+  limiter.recordUsage(DEFAULT_PROVIDER_ID, 'image', 0, { model: IMAGE_MODEL });
   return { dataUrl: `data:${mimeType};base64,${img.data}`, mimeType };
 }
