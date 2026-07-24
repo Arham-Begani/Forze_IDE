@@ -1,30 +1,42 @@
 import {
   AlertTriangle,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Check,
+  ChevronDown,
   GitBranch,
   Loader2,
   Minus,
   Plus,
   RefreshCw,
+  RotateCcw,
   ShieldAlert,
   ShieldCheck,
   Zap,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import {
+  branches as gitBranches,
+  checkout as gitCheckout,
   describeStatus,
+  fetch as gitFetch,
+  pull as gitPull,
+  push as gitPush,
+  restoreFile as gitRestoreFile,
   stage as gitStage,
   stageAll as gitStageAll,
   unstage as gitUnstage,
+  type GitBranches,
   type GitStatusEntry,
 } from '../lib/git';
 import { partitionFindings } from '../lib/diffScan';
 import { basename, dirname, joinPath } from '../lib/fs';
-import { openFile } from '../workbench/actions';
+import { deleteEntry, openDiff, openFile } from '../workbench/actions';
 import { guardedCommit, reviewStaged } from '../workbench/commitGuard';
 import { useCommitGuard, type ReviewResult } from '../workbench/commitGuardStore';
 import { useGitStatus } from '../workbench/gitStatusStore';
 import { useProject } from '../workbench/projectStore';
+import { confirmModal, promptModal } from '../shell/modal';
 import ToggleSwitch from '../shell/ToggleSwitch';
 import { toast } from '../shell/toast';
 
@@ -46,15 +58,125 @@ export default function SourceControlView(): JSX.Element {
     void refresh();
   }, [refresh, workspaceRoot, isGitRepo]);
 
-  const openEntry = useCallback(
-    (entry: GitStatusEntry) => {
-      if (!workspaceRoot) return;
-      // entry.path is repo-relative with `/`; split into segments so joinPath
-      // produces a fully native path that matches how editor tabs are keyed.
-      void openFile(joinPath(workspaceRoot, ...entry.path.split('/')));
-    },
+  // Which remote/branch op is running, for spinner + disabled state.
+  const [remoteBusy, setRemoteBusy] = useState<string | null>(null);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [branchList, setBranchList] = useState<GitBranches | null>(null);
+
+  // entry.path is repo-relative with `/`; split into segments so joinPath
+  // produces a fully native path that matches how editor tabs are keyed.
+  const absOf = useCallback(
+    (entry: GitStatusEntry) =>
+      workspaceRoot ? joinPath(workspaceRoot, ...entry.path.split('/')) : '',
     [workspaceRoot],
   );
+
+  // VS Code-style: clicking a tracked change opens its diff; untracked files
+  // have no diff to show, so open the file itself.
+  const openStaged = useCallback(
+    (entry: GitStatusEntry) => openDiff(entry.path, true),
+    [],
+  );
+  const openWorking = useCallback(
+    (entry: GitStatusEntry) => {
+      if (entry.untracked) void openFile(absOf(entry));
+      else openDiff(entry.path, false);
+    },
+    [absOf],
+  );
+
+  const discardTracked = useCallback(
+    async (entry: GitStatusEntry) => {
+      if (!workspaceRoot) return;
+      const ok = await confirmModal({
+        title: 'Discard changes',
+        message: `Discard all changes to "${entry.path}"? This reverts it to the last commit and cannot be undone.`,
+        confirmLabel: 'Discard',
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        await gitRestoreFile(workspaceRoot, entry.path);
+        await refresh();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : String(err), 'error');
+      }
+    },
+    [workspaceRoot, refresh],
+  );
+
+  const discardUntracked = useCallback(
+    async (entry: GitStatusEntry) => {
+      if (!workspaceRoot) return;
+      const ok = await confirmModal({
+        title: 'Delete untracked file',
+        message: `Delete "${entry.path}"? It isn't tracked by git, so this permanently removes it.`,
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        await deleteEntry(absOf(entry));
+        await refresh();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : String(err), 'error');
+      }
+    },
+    [workspaceRoot, absOf, refresh],
+  );
+
+  const runRemote = useCallback(
+    async (label: string, fn: () => Promise<unknown>, done: string) => {
+      if (!workspaceRoot) return;
+      setRemoteBusy(label);
+      setActionError(null);
+      try {
+        await fn();
+        toast(done, 'success');
+        await refresh();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setActionError(msg);
+        toast(msg, 'error');
+      } finally {
+        setRemoteBusy(null);
+      }
+    },
+    [workspaceRoot, refresh],
+  );
+
+  const openBranchMenu = useCallback(async () => {
+    if (!workspaceRoot) return;
+    setBranchMenuOpen((v) => !v);
+    try {
+      setBranchList(await gitBranches(workspaceRoot));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'error');
+    }
+  }, [workspaceRoot]);
+
+  const switchBranch = useCallback(
+    async (name: string, create: boolean) => {
+      if (!workspaceRoot) return;
+      setBranchMenuOpen(false);
+      await runRemote(
+        'checkout',
+        () => gitCheckout(workspaceRoot, name, create),
+        create ? `Created ${name}` : `Switched to ${name}`,
+      );
+    },
+    [workspaceRoot, runRemote],
+  );
+
+  const createBranch = useCallback(async () => {
+    const name = await promptModal({
+      title: 'New branch',
+      message: 'Name the new branch (created from the current HEAD):',
+      placeholder: 'feature/my-change',
+      confirmLabel: 'Create',
+    });
+    if (name && name.trim()) await switchBranch(name.trim(), true);
+  }, [switchBranch]);
 
   if (!workspaceRoot) {
     return (
@@ -111,24 +233,122 @@ export default function SourceControlView(): JSX.Element {
   return (
     <div className="scm">
       <header className="scm__bar">
-        <GitBranch size={12} strokeWidth={2} />
-        <span className="scm__branch">{report?.branch ?? 'detached'}</span>
+        <div style={{ position: 'relative', display: 'flex', minWidth: 0 }}>
+          <button
+            type="button"
+            className="scm__branch-btn"
+            onClick={openBranchMenu}
+            title="Switch branch"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              background: 'transparent',
+              border: 0,
+              color: 'inherit',
+              cursor: 'pointer',
+              font: 'inherit',
+              padding: '2px 4px',
+              borderRadius: 5,
+              minWidth: 0,
+            }}
+          >
+            <GitBranch size={12} strokeWidth={2} />
+            <span
+              className="scm__branch"
+              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              {report?.branch ?? 'detached'}
+            </span>
+            <ChevronDown size={11} style={{ opacity: 0.6, flex: '0 0 auto' }} />
+          </button>
+          {branchMenuOpen && (
+            <BranchMenu
+              list={branchList}
+              current={report?.branch ?? null}
+              onPick={(name) => switchBranch(name, false)}
+              onCreate={createBranch}
+              onClose={() => setBranchMenuOpen(false)}
+            />
+          )}
+        </div>
+
         {report && (report.ahead > 0 || report.behind > 0) && (
           <span className="scm__sync">
             {report.ahead > 0 && `↑${report.ahead}`}
             {report.behind > 0 && ` ↓${report.behind}`}
           </span>
         )}
-        <span className="scm__count">{totalChanges}</span>
-        <button
-          type="button"
-          className="scm__icon-btn"
-          onClick={refresh}
-          title="Refresh"
-          aria-label="Refresh"
-        >
-          <RefreshCw size={12} />
-        </button>
+
+        <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: 2 }}>
+          <button
+            type="button"
+            className="scm__icon-btn"
+            onClick={() =>
+              runRemote(
+                'pull',
+                () => gitPull(workspaceRoot),
+                report && report.behind > 0 ? 'Pulled' : 'Already up to date',
+              )
+            }
+            disabled={remoteBusy !== null}
+            title={report && report.behind > 0 ? `Pull ${report.behind}` : 'Pull'}
+            aria-label="Pull"
+          >
+            {remoteBusy === 'pull' ? (
+              <Loader2 size={12} className="spin" />
+            ) : (
+              <ArrowDownToLine size={12} />
+            )}
+          </button>
+          <button
+            type="button"
+            className="scm__icon-btn"
+            onClick={() =>
+              runRemote(
+                'push',
+                async () => {
+                  try {
+                    await gitPush(workspaceRoot, false);
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    // A brand-new branch has no upstream yet — set it and retry.
+                    if (/upstream|set-upstream/i.test(msg)) {
+                      await gitPush(workspaceRoot, true);
+                    } else {
+                      throw err;
+                    }
+                  }
+                },
+                'Pushed',
+              )
+            }
+            disabled={remoteBusy !== null}
+            title={report && report.ahead > 0 ? `Push ${report.ahead}` : 'Push'}
+            aria-label="Push"
+          >
+            {remoteBusy === 'push' ? (
+              <Loader2 size={12} className="spin" />
+            ) : (
+              <ArrowUpFromLine size={12} />
+            )}
+          </button>
+          <button
+            type="button"
+            className="scm__icon-btn"
+            onClick={() => runRemote('fetch', () => gitFetch(workspaceRoot), 'Fetched')}
+            disabled={remoteBusy !== null}
+            title="Fetch"
+            aria-label="Fetch"
+          >
+            {remoteBusy === 'fetch' ? (
+              <Loader2 size={12} className="spin" />
+            ) : (
+              <RefreshCw size={12} />
+            )}
+          </button>
+          <span className="scm__count">{totalChanges}</span>
+        </div>
       </header>
 
       <CommitGuardPanel workspaceRoot={workspaceRoot} hasStaged={hasStaged} />
@@ -182,7 +402,7 @@ export default function SourceControlView(): JSX.Element {
       <ChangeGroup
         title="Staged Changes"
         entries={staged}
-        onOpen={openEntry}
+        onOpen={openStaged}
         onAction={async (paths) => {
           if (!workspaceRoot) return;
           await gitUnstage(workspaceRoot, paths);
@@ -195,7 +415,8 @@ export default function SourceControlView(): JSX.Element {
       <ChangeGroup
         title="Changes"
         entries={unstaged}
-        onOpen={openEntry}
+        onOpen={openWorking}
+        onDiscard={discardTracked}
         onAction={async (paths) => {
           if (!workspaceRoot) return;
           await gitStage(workspaceRoot, paths);
@@ -208,7 +429,8 @@ export default function SourceControlView(): JSX.Element {
       <ChangeGroup
         title="Untracked"
         entries={untracked}
-        onOpen={openEntry}
+        onOpen={openWorking}
+        onDiscard={discardUntracked}
         onAction={async (paths) => {
           if (!workspaceRoot) return;
           await gitStage(workspaceRoot, paths);
@@ -226,9 +448,124 @@ interface ChangeGroupProps {
   entries: GitStatusEntry[];
   onOpen: (entry: GitStatusEntry) => void;
   onAction: (paths: string[]) => Promise<void>;
+  /** When set, each row gets a "discard changes" affordance. */
+  onDiscard?: (entry: GitStatusEntry) => void;
   actionLabel: string;
   actionIcon: JSX.Element;
 }
+
+/**
+ * Branch switcher popover: local + remote-tracking branches, plus "New branch".
+ * Absolutely positioned under the branch button; closes on outside click.
+ */
+function BranchMenu({
+  list,
+  current,
+  onPick,
+  onCreate,
+  onClose,
+}: {
+  list: GitBranches | null;
+  current: string | null;
+  onPick: (name: string) => void;
+  onCreate: () => void;
+  onClose: () => void;
+}): JSX.Element {
+  useEffect(() => {
+    const onDown = (e: MouseEvent): void => {
+      const el = e.target as HTMLElement;
+      if (!el.closest('.scm__branch-menu') && !el.closest('.scm__branch-btn')) onClose();
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="scm__branch-menu"
+      role="menu"
+      style={{
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        marginTop: 4,
+        minWidth: 220,
+        maxHeight: 320,
+        overflow: 'auto',
+        zIndex: 40,
+        background: 'var(--panel, #1b1b1f)',
+        border: '1px solid var(--border, rgba(128,128,128,0.3))',
+        borderRadius: 8,
+        boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+        padding: 4,
+        fontSize: 12,
+      }}
+    >
+      <button type="button" className="scm__branch-item" role="menuitem" onClick={onCreate} style={BRANCH_ITEM}>
+        <Plus size={12} /> New branch…
+      </button>
+      {list === null ? (
+        <div style={{ padding: '8px 10px', opacity: 0.6 }}>
+          <Loader2 size={12} className="spin" /> Loading branches…
+        </div>
+      ) : (
+        <>
+          {list.local.length > 0 && <div style={BRANCH_HEADING}>Local</div>}
+          {list.local.map((name) => (
+            <button
+              key={`l:${name}`}
+              type="button"
+              className="scm__branch-item"
+              role="menuitem"
+              onClick={() => onPick(name)}
+              disabled={name === current}
+              style={{ ...BRANCH_ITEM, opacity: name === current ? 0.5 : 1 }}
+            >
+              <GitBranch size={12} /> {name}
+              {name === current && <Check size={12} style={{ marginLeft: 'auto' }} />}
+            </button>
+          ))}
+          {list.remote.length > 0 && <div style={BRANCH_HEADING}>Remote</div>}
+          {list.remote.map((name) => (
+            <button
+              key={`r:${name}`}
+              type="button"
+              className="scm__branch-item"
+              role="menuitem"
+              onClick={() => onPick(name)}
+              style={BRANCH_ITEM}
+            >
+              <GitBranch size={12} style={{ opacity: 0.6 }} /> {name}
+            </button>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+const BRANCH_ITEM: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  width: '100%',
+  padding: '6px 10px',
+  background: 'transparent',
+  border: 0,
+  borderRadius: 6,
+  color: 'inherit',
+  font: 'inherit',
+  cursor: 'pointer',
+  textAlign: 'left',
+};
+
+const BRANCH_HEADING: CSSProperties = {
+  padding: '6px 10px 2px',
+  fontSize: 10,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  opacity: 0.5,
+};
 
 /** Map a porcelain code to the diff tone that colours its status badge. */
 function toneFor(entry: GitStatusEntry): 'added' | 'modified' | 'deleted' {
@@ -250,6 +587,7 @@ function ChangeGroup({
   entries,
   onOpen,
   onAction,
+  onDiscard,
   actionLabel,
   actionIcon,
 }: ChangeGroupProps): JSX.Element | null {
@@ -291,6 +629,20 @@ function ChangeGroup({
           >
             <span className="scm__name">{basename(entry.path)}</span>
             {dir && <span className="scm__dir">{dir}</span>}
+            {onDiscard && (
+              <button
+                type="button"
+                className="scm__row-action"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDiscard(entry);
+                }}
+                title="Discard changes"
+                aria-label={`Discard ${entry.path}`}
+              >
+                <RotateCcw size={12} />
+              </button>
+            )}
             <button
               type="button"
               className="scm__row-action"
