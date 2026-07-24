@@ -7,11 +7,38 @@ import {
   useRef,
   useState,
 } from 'react';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { highlight } from '../lib/highlight';
 import { formatCode } from '../lib/format';
 import { computeLineDiff } from '../lib/lineDiff';
+import { buildMatcher, type SearchOptions } from '../lib/search';
 import { toast } from '../shell/toast';
 import type { StackTraceLine } from '@forze/shared/diagnostics';
+
+/** All match ranges [start, end) of `query` in `text` under the given options.
+ *  Reuses the workspace-search matcher so in-editor find behaves identically to
+ *  the Search panel (case / whole-word / regex). Returns [] for empty or invalid
+ *  patterns so the caller can just render "0 results". */
+function computeMatches(
+  text: string,
+  query: string,
+  opts: SearchOptions,
+): Array<[number, number]> {
+  if (!query) return [];
+  const built = buildMatcher(query, opts);
+  if ('error' in built) return [];
+  const re = built.regex; // global
+  const out: Array<[number, number]> = [];
+  re.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  let guard = 0;
+  while ((m = re.exec(text)) !== null) {
+    out.push([m.index, m.index + m[0].length]);
+    if (m.index === re.lastIndex) re.lastIndex += 1; // zero-width guard
+    if (++guard > 100_000) break;
+  }
+  return out;
+}
 
 /** Auto-closing pairs: typing the opener inserts the closer and keeps the caret
  *  between them. Quotes are symmetric (the opener equals the closer). */
@@ -75,6 +102,19 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
     const preRef = useRef<HTMLPreElement | null>(null);
     const gutterRef = useRef<HTMLDivElement | null>(null);
     const activeLineRef = useRef<HTMLDivElement | null>(null);
+
+    // --- Find & Replace (Ctrl+F / Ctrl+H) ---
+    const [findOpen, setFindOpen] = useState(false);
+    const [replaceShown, setReplaceShown] = useState(false);
+    const [findQuery, setFindQuery] = useState('');
+    const [replaceWith, setReplaceWith] = useState('');
+    const [findOpts, setFindOpts] = useState<SearchOptions>({
+      caseSensitive: false,
+      wholeWord: false,
+      regex: false,
+    });
+    const [activeMatch, setActiveMatch] = useState(0);
+    const findInputRef = useRef<HTMLInputElement | null>(null);
 
     // Re-seed when the file changes. EditorArea remounts via key={tabId}, but
     // this keeps us correct if that ever changes.
@@ -251,7 +291,104 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
       });
     };
 
+    // Recompute match ranges whenever the query, options, or buffer change (only
+    // while the bar is open — this walks the whole buffer).
+    const matches = useMemo(
+      () => (findOpen ? computeMatches(value, findQuery, findOpts) : []),
+      [findOpen, value, findQuery, findOpts],
+    );
+
+    // Keep the active-match index in range as the match set shrinks/grows.
+    useEffect(() => {
+      if (matches.length === 0) {
+        if (activeMatch !== 0) setActiveMatch(0);
+      } else if (activeMatch >= matches.length) {
+        setActiveMatch(matches.length - 1);
+      }
+    }, [matches, activeMatch]);
+
+    /** Select the i-th match in the textarea and centre it. */
+    const goToMatch = (i: number): void => {
+      const ta = taRef.current;
+      const hit = matches[i];
+      if (!ta || !hit) return;
+      const [s, e] = hit;
+      ta.focus();
+      ta.setSelectionRange(s, e);
+      const lineOfStart = value.slice(0, s).split('\n').length;
+      ta.scrollTop = Math.max(
+        0,
+        (lineOfStart - 1) * LINE_HEIGHT - ta.clientHeight / 2 + LINE_HEIGHT,
+      );
+      syncScroll();
+      setActiveMatch(i);
+    };
+
+    const nextMatch = (): void => {
+      if (matches.length > 0) goToMatch((activeMatch + 1) % matches.length);
+    };
+    const prevMatch = (): void => {
+      if (matches.length > 0)
+        goToMatch((activeMatch - 1 + matches.length) % matches.length);
+    };
+
+    /** Open the find bar (optionally in replace mode), seeding a one-line
+     *  selection as the query the way VS Code does. */
+    const openFind = (replace: boolean): void => {
+      setFindOpen(true);
+      setReplaceShown(replace);
+      const ta = taRef.current;
+      if (ta && ta.selectionStart !== ta.selectionEnd) {
+        const sel = value.slice(ta.selectionStart, ta.selectionEnd);
+        if (!sel.includes('\n')) setFindQuery(sel);
+      }
+      requestAnimationFrame(() => {
+        findInputRef.current?.focus();
+        findInputRef.current?.select();
+      });
+    };
+
+    const closeFind = (): void => {
+      setFindOpen(false);
+      requestAnimationFrame(() => taRef.current?.focus());
+    };
+
+    const replaceOne = (): void => {
+      const hit = matches[activeMatch];
+      if (!hit) return;
+      const [s, e] = hit;
+      commit(value.slice(0, s) + replaceWith + value.slice(e), s + replaceWith.length);
+    };
+
+    const replaceAll = (): void => {
+      if (matches.length === 0) return;
+      let result = '';
+      let last = 0;
+      for (const [s, e] of matches) {
+        result += value.slice(last, s) + replaceWith;
+        last = e;
+      }
+      result += value.slice(last);
+      const count = matches.length;
+      const ta = taRef.current;
+      const caret = ta ? Math.min(ta.selectionStart, result.length) : 0;
+      commit(result, caret);
+      toast(`Replaced ${count} occurrence${count === 1 ? '' : 's'}`, 'success');
+    };
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+      // --- Find / Replace shortcuts (work whenever the editor has focus). ---
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        openFind(false);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'h' || e.key === 'H')) {
+        e.preventDefault();
+        openFind(true);
+        return;
+      }
+
       const ta = e.currentTarget;
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
@@ -399,6 +536,26 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
           </div>
         </div>
         <div className="codeedit__main">
+          {findOpen && (
+            <FindReplaceBar
+              query={findQuery}
+              setQuery={setFindQuery}
+              replaceWith={replaceWith}
+              setReplaceWith={setReplaceWith}
+              opts={findOpts}
+              setOpts={setFindOpts}
+              replaceShown={replaceShown}
+              toggleReplace={() => setReplaceShown((v) => !v)}
+              matchCount={matches.length}
+              activeIndex={activeMatch}
+              inputRef={findInputRef}
+              onNext={nextMatch}
+              onPrev={prevMatch}
+              onReplaceOne={replaceOne}
+              onReplaceAll={replaceAll}
+              onClose={closeFind}
+            />
+          )}
           <pre className="codeedit__pre" ref={preRef} aria-hidden>
             {highlighted}
           </pre>
@@ -426,3 +583,226 @@ const EditorCanvas = forwardRef<EditorHandle, EditorCanvasProps>(
 );
 
 export default EditorCanvas;
+
+interface FindReplaceBarProps {
+  query: string;
+  setQuery: (v: string) => void;
+  replaceWith: string;
+  setReplaceWith: (v: string) => void;
+  opts: SearchOptions;
+  setOpts: (updater: (prev: SearchOptions) => SearchOptions) => void;
+  replaceShown: boolean;
+  toggleReplace: () => void;
+  matchCount: number;
+  activeIndex: number;
+  inputRef: React.RefObject<HTMLInputElement>;
+  onNext: () => void;
+  onPrev: () => void;
+  onReplaceOne: () => void;
+  onReplaceAll: () => void;
+  onClose: () => void;
+}
+
+/**
+ * The in-editor Find & Replace overlay (Ctrl+F / Ctrl+H). Anchored top-right of
+ * the editor pane, self-styled so it needs no CSS partial. Enter finds next,
+ * Shift+Enter finds previous, Escape closes.
+ */
+function FindReplaceBar(props: FindReplaceBarProps): JSX.Element {
+  const {
+    query,
+    setQuery,
+    replaceWith,
+    setReplaceWith,
+    opts,
+    setOpts,
+    replaceShown,
+    toggleReplace,
+    matchCount,
+    activeIndex,
+    inputRef,
+    onNext,
+    onPrev,
+    onReplaceOne,
+    onReplaceAll,
+    onClose,
+  } = props;
+
+  const onFindKey = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) onPrev();
+      else onNext();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+    }
+  };
+
+  const count =
+    matchCount === 0 ? (query ? 'No results' : '') : `${activeIndex + 1} of ${matchCount}`;
+
+  return (
+    <div style={FRB.wrap} role="search">
+      <button type="button" style={FRB.expand} onClick={toggleReplace} title="Toggle Replace">
+        {replaceShown ? <ChevronDown size={14} /> : <ChevronDown size={14} style={{ transform: 'rotate(-90deg)' }} />}
+      </button>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={FRB.row}>
+          <input
+            ref={inputRef}
+            style={FRB.input}
+            value={query}
+            placeholder="Find"
+            spellCheck={false}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onFindKey}
+          />
+          <span style={FRB.count}>{count}</span>
+          <ToggleBtn active={opts.caseSensitive} label="Aa" title="Match case"
+            onClick={() => setOpts((p) => ({ ...p, caseSensitive: !p.caseSensitive }))} />
+          <ToggleBtn active={opts.wholeWord} label="W" title="Whole word"
+            onClick={() => setOpts((p) => ({ ...p, wholeWord: !p.wholeWord }))} />
+          <ToggleBtn active={opts.regex} label=".*" title="Use regular expression"
+            onClick={() => setOpts((p) => ({ ...p, regex: !p.regex }))} />
+          <button type="button" style={FRB.icon} onClick={onPrev} title="Previous (Shift+Enter)" disabled={matchCount === 0}>
+            <ChevronUp size={14} />
+          </button>
+          <button type="button" style={FRB.icon} onClick={onNext} title="Next (Enter)" disabled={matchCount === 0}>
+            <ChevronDown size={14} />
+          </button>
+          <button type="button" style={FRB.icon} onClick={onClose} title="Close (Esc)">
+            <X size={14} />
+          </button>
+        </div>
+
+        {replaceShown && (
+          <div style={FRB.row}>
+            <input
+              style={FRB.input}
+              value={replaceWith}
+              placeholder="Replace"
+              spellCheck={false}
+              onChange={(e) => setReplaceWith(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onReplaceOne();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  onClose();
+                }
+              }}
+            />
+            <button type="button" style={FRB.textBtn} onClick={onReplaceOne} disabled={matchCount === 0} title="Replace">
+              Replace
+            </button>
+            <button type="button" style={FRB.textBtn} onClick={onReplaceAll} disabled={matchCount === 0} title="Replace all">
+              All
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ToggleBtn({
+  active,
+  label,
+  title,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  title: string;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-pressed={active}
+      onClick={onClick}
+      style={{
+        ...FRB.icon,
+        width: 24,
+        fontSize: 11,
+        fontWeight: 700,
+        background: active ? 'rgba(120,150,255,0.28)' : 'transparent',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+const FRB: Record<string, React.CSSProperties> = {
+  wrap: {
+    position: 'absolute',
+    top: 8,
+    right: 18,
+    zIndex: 20,
+    display: 'flex',
+    gap: 4,
+    padding: 6,
+    background: 'var(--panel, #24242a)',
+    border: '1px solid var(--border, rgba(128,128,128,0.35))',
+    borderRadius: 8,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+  },
+  expand: {
+    display: 'flex',
+    alignItems: 'center',
+    background: 'transparent',
+    border: 0,
+    color: 'inherit',
+    cursor: 'pointer',
+    padding: '0 2px',
+    opacity: 0.7,
+  },
+  row: { display: 'flex', alignItems: 'center', gap: 2 },
+  input: {
+    width: 200,
+    padding: '4px 8px',
+    fontSize: 12,
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    color: 'inherit',
+    background: 'rgba(128,128,128,0.14)',
+    border: '1px solid var(--border, rgba(128,128,128,0.25))',
+    borderRadius: 5,
+    outline: 'none',
+  },
+  count: {
+    minWidth: 62,
+    fontSize: 11,
+    opacity: 0.6,
+    textAlign: 'right',
+    fontVariantNumeric: 'tabular-nums',
+    padding: '0 4px',
+  },
+  icon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 22,
+    height: 22,
+    background: 'transparent',
+    border: 0,
+    borderRadius: 5,
+    color: 'inherit',
+    cursor: 'pointer',
+    opacity: 0.85,
+  },
+  textBtn: {
+    padding: '3px 8px',
+    fontSize: 11,
+    fontWeight: 600,
+    background: 'rgba(128,128,128,0.16)',
+    border: '1px solid var(--border, rgba(128,128,128,0.25))',
+    borderRadius: 5,
+    color: 'inherit',
+    cursor: 'pointer',
+  },
+};
