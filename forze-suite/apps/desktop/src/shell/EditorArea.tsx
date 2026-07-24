@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import EditorCanvas, { type EditorHandle } from '../views/EditorCanvas';
+import DiffView from '../views/DiffView';
 import WelcomeScreen from '../views/WelcomeScreen';
 import ErrorBoundary from './ErrorBoundary';
 import PanelFallback from './PanelFallback';
@@ -211,11 +212,18 @@ export default function EditorArea({ registerActiveEditor }: EditorAreaProps): J
           );
         })}
 
-        {/* Code editor / welcome — only when the active tab isn't a skill page,
-            so a page and the editor are never both visible at once. */}
+        {/* Code editor / diff / welcome — only when the active tab isn't a skill
+            page, so a page and the editor are never both visible at once. */}
         {!pagePanel && (
           <ErrorBoundary scope="Editor" key={activeTab?.id ?? 'empty'}>
-            {isWelcome ? (
+            {activeTab?.diff && workspaceRoot ? (
+              <DiffView
+                key={activeTab.id}
+                cwd={workspaceRoot}
+                relPath={activeTab.diff.relPath}
+                staged={activeTab.diff.staged}
+              />
+            ) : isWelcome ? (
               <div className="editor-area__empty">
                 <WelcomeScreen />
               </div>
