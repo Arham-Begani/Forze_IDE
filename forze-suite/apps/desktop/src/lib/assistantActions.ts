@@ -21,6 +21,8 @@ import { runMission } from './missionRunner';
 import { missionKanbanBridge } from './missionKanbanBridge';
 import { deployWithAutoFix } from './deployHeal';
 import { computeWorkspaceMetrics } from './projectMetrics';
+import { runDigest } from './digest';
+import { composeRelease, writeChangelog } from './releaseComposer';
 import { generateText } from './ai';
 import { parseWhen } from './parseWhen';
 import { basename } from './fs';
@@ -188,6 +190,50 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       return `${m.totalFiles.toLocaleString()} files · ${m.totalLoc.toLocaleString()} lines${
         m.truncated ? '+' : ''
       }${top ? ` · top: ${top}` : ''}.`;
+    },
+  },
+  {
+    name: 'catch_me_up',
+    impact: 'instant',
+    usage:
+      '"catch_me_up" {} — summarize what changed while the user was away: new git ' +
+      'commits, uncommitted work, the autonomous agent crew\'s task board (esp. ' +
+      'anything blocked), and recent coding-agent terminal output. Use when the user ' +
+      'asks "what happened", "catch me up", "what did the agents do", or "what changed".',
+    describe: () => 'Catch you up on recent activity',
+    run: async () => {
+      const root = useProject.getState().workspaceRoot;
+      if (!root) return 'Open a project folder first, then I can catch you up.';
+      const { text } = await runDigest({
+        root,
+        since: Date.now() - 8 * 60 * 60 * 1000,
+        sinceLabel: 'earlier',
+      });
+      return text;
+    },
+  },
+  {
+    name: 'compose_release',
+    impact: 'confirm',
+    usage:
+      '"compose_release" {} — draft release notes from the git commits since the ' +
+      'last tag: writes a versioned entry to CHANGELOG.md and drafts a ' +
+      'build-in-public announcement. Use when the user says "draft my release ' +
+      'notes", "write a changelog", "release notes", or "what should the launch ' +
+      'post say".',
+    describe: () => 'Draft release notes + CHANGELOG',
+    run: async () => {
+      const root = useProject.getState().workspaceRoot;
+      if (!root) return 'Open a project folder first, then I can draft your release notes.';
+      const draft = await composeRelease(root);
+      await writeChangelog(root, draft);
+      const since = draft.sinceTag ? ` since ${draft.sinceTag}` : '';
+      return (
+        `Drafted **v${draft.version}** from ${draft.commitCount} commit` +
+        `${draft.commitCount === 1 ? '' : 's'}${since} and wrote CHANGELOG.md.\n\n` +
+        `Suggested post:\n\n${draft.announcement}\n\n` +
+        `Say “post that to LinkedIn” to queue it, or run \`node scripts/release.mjs\` to ship v${draft.version}.`
+      );
     },
   },
   {
