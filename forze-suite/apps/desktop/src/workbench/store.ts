@@ -94,6 +94,11 @@ export interface EditorTab {
   /** When set, this tab renders a full-area skill page (Dashboard, Analytics,
    *  …) in the main workspace instead of a code editor. */
   pageId?: ActivityId;
+  /** When set, this tab renders a read-only unified diff (DiffView) for a
+   *  repo-relative path instead of a code editor. Ephemeral — diff tabs are
+   *  stripped from the persisted snapshot (see `partialize`) since they're just
+   *  a lens on the current working tree. */
+  diff?: { relPath: string; staged: boolean };
 }
 
 interface WorkbenchState {
@@ -363,7 +368,10 @@ export const useWorkbench = create<WorkbenchState>()(
         bottomPanelVisible: state.bottomPanelVisible,
         bottomPanelHeight: state.bottomPanelHeight,
         bottomPanelTab: state.bottomPanelTab,
-        editorTabs: state.editorTabs,
+        // Diff tabs are an ephemeral lens on the working tree — don't persist
+        // them (a restored diff tab could point at a since-changed file). Any
+        // dangling activeTabId is repaired by sanitizePersisted on rehydrate.
+        editorTabs: state.editorTabs.filter((t) => !t.diff),
         activeTabId: state.activeTabId,
       }),
     },
