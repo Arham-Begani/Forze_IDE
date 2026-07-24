@@ -2,23 +2,28 @@ import {
   CaseSensitive,
   ChevronDown,
   ChevronRight,
+  Loader2,
   Regex,
+  Replace,
   Search,
   WholeWord,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  buildMatcher,
   searchWorkspace,
   type FileResult,
   type SearchMatch,
   type SearchOptions,
   type SearchToken,
 } from '../lib/search';
-import { basename } from '../lib/fs';
+import { basename, readFile, writeFile } from '../lib/fs';
 import { openFile } from '../workbench/actions';
 import { useProject } from '../workbench/projectStore';
 import { useReveal } from '../workbench/reveal';
+import { confirmModal } from '../shell/modal';
+import { toast } from '../shell/toast';
 
 const DEBOUNCE_MS = 250;
 const MAX_MATCHES = 5000;
@@ -38,6 +43,9 @@ export default function SearchView(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [matchCount, setMatchCount] = useState(0);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [replaceValue, setReplaceValue] = useState('');
+  const [replacing, setReplacing] = useState(false);
 
   const tokenRef = useRef<SearchToken>({ cancelled: false });
 
@@ -113,6 +121,60 @@ export default function SearchView(): JSX.Element {
   const toggleOpt = (key: keyof SearchOptions) =>
     setOpts((o) => ({ ...o, [key]: !o[key] }));
 
+  /**
+   * Replace every match across the workspace. Re-reads each file fresh and runs
+   * the same matcher (not the possibly-stale preview ranges), so the write is
+   * always correct. Literal replacements escape `$` so it isn't read as a
+   * capture-group reference; regex mode leaves `$1` etc. intact.
+   */
+  const replaceAll = useCallback(async () => {
+    const q = query.trim();
+    if (!q || !workspaceRoot || results.length === 0) return;
+    const built = buildMatcher(q, opts);
+    if ('error' in built) {
+      toast(built.error, 'error');
+      return;
+    }
+    const ok = await confirmModal({
+      title: 'Replace in files',
+      message: `Replace ${matchCount} occurrence${matchCount === 1 ? '' : 's'} across ${
+        results.length
+      } file${results.length === 1 ? '' : 's'} with "${replaceValue}"? This writes to disk and can't be undone.`,
+      confirmLabel: 'Replace All',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setReplacing(true);
+    const project = useProject.getState();
+    const replacement = opts.regex ? replaceValue : replaceValue.replace(/\$/g, '$$$$');
+    let filesChanged = 0;
+    try {
+      for (const file of results) {
+        let content: string;
+        try {
+          content = await readFile(file.path);
+        } catch {
+          continue;
+        }
+        // Fresh regex per file so `lastIndex` state never leaks between files.
+        const re = new RegExp(built.regex.source, built.regex.flags);
+        const next = content.replace(re, replacement);
+        if (next !== content) {
+          await writeFile(file.path, next);
+          if (project.buffers.has(file.path)) project.setBuffer(file.path, next);
+          filesChanged += 1;
+        }
+      }
+      toast(`Replaced in ${filesChanged} file${filesChanged === 1 ? '' : 's'}`, 'success');
+      void run(q, opts, workspaceRoot); // re-search so the panel reflects reality
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'error');
+    } finally {
+      setReplacing(false);
+    }
+  }, [query, workspaceRoot, results, opts, matchCount, replaceValue, run]);
+
   return (
     <div className="search-view">
       <div className="search-view__head">
@@ -160,7 +222,73 @@ export default function SearchView(): JSX.Element {
           >
             <Regex size={14} />
           </OptToggle>
+          <OptToggle
+            active={replaceOpen}
+            title="Toggle Replace"
+            onClick={() => setReplaceOpen((v) => !v)}
+          >
+            <Replace size={14} />
+          </OptToggle>
         </div>
+
+        {replaceOpen && (
+          <div
+            style={{
+              display: 'flex',
+              gap: 6,
+              alignItems: 'center',
+              padding: '2px 8px 8px',
+            }}
+          >
+            <input
+              value={replaceValue}
+              onChange={(e) => setReplaceValue(e.target.value)}
+              placeholder="Replace"
+              spellCheck={false}
+              aria-label="Replace with"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: '5px 8px',
+                fontSize: 12,
+                color: 'inherit',
+                background: 'rgba(128,128,128,0.14)',
+                border: '1px solid var(--border, rgba(128,128,128,0.25))',
+                borderRadius: 5,
+                outline: 'none',
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void replaceAll();
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => void replaceAll()}
+              disabled={replacing || matchCount === 0 || status === 'searching'}
+              title="Replace all across the workspace"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '5px 10px',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'inherit',
+                background: 'rgba(128,128,128,0.16)',
+                border: '1px solid var(--border, rgba(128,128,128,0.25))',
+                borderRadius: 5,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {replacing ? <Loader2 size={12} className="spin" /> : <Replace size={12} />}
+              Replace All
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="search-view__status">
