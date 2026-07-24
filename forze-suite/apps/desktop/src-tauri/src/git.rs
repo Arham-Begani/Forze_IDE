@@ -239,3 +239,116 @@ pub fn git_file_head(cwd: String, path: String) -> Result<String, String> {
         Err(_) => Ok(String::new()),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Remote sync + branch operations (Milestone 1 — "Actually Ship").
+//
+// The SCM panel could stage + commit but had no way to actually push work
+// anywhere, switch branches, or discard a bad edit — a commit with no push is a
+// dead end. These commands close that gap. All go through `run_git`, so they
+// inherit `no_window` (no console flash) and the "stderr becomes the Err string"
+// contract the frontend surfaces as a toast.
+// ---------------------------------------------------------------------------
+
+/// Push the current branch to its remote. When `set_upstream` is true (the
+/// branch has no tracking remote yet), push with `-u origin <branch>` so future
+/// pushes/pulls "just work". Git writes progress to stderr even on success, so a
+/// clean push returns an empty string; a rejected push surfaces git's message.
+#[command]
+pub fn git_push(cwd: String, set_upstream: bool) -> Result<String, String> {
+    if set_upstream {
+        let branch = git_current_branch(cwd.clone())?;
+        run_git(&cwd, &["push", "--set-upstream", "origin", branch.trim()])
+    } else {
+        run_git(&cwd, &["push"])
+    }
+}
+
+/// Pull with the user's configured strategy (merge unless `pull.rebase` is set),
+/// matching what `git pull` does at the CLI. A conflict or diverged history exits
+/// non-zero, surfacing git's message to the user rather than silently merging.
+#[command]
+pub fn git_pull(cwd: String) -> Result<String, String> {
+    run_git(&cwd, &["pull"])
+}
+
+/// Fetch all remotes and prune deleted remote branches. Read-only — never
+/// touches the working tree — so it's safe to offer as a one-click refresh.
+#[command]
+pub fn git_fetch(cwd: String) -> Result<String, String> {
+    run_git(&cwd, &["fetch", "--all", "--prune"])
+}
+
+#[derive(Serialize)]
+pub struct GitBranches {
+    /// The checked-out branch (or a detached-HEAD sha).
+    pub current: String,
+    /// Local branch names, alphabetical.
+    pub local: Vec<String>,
+    /// Remote-tracking branch names (e.g. "origin/main"), minus the symbolic
+    /// "origin/HEAD" pointer which isn't a real branch to check out.
+    pub remote: Vec<String>,
+}
+
+/// List local + remote-tracking branches and mark the current one, for the SCM
+/// branch switcher. Uses `for-each-ref` (stable, script-friendly output) rather
+/// than parsing `git branch`'s human formatting.
+#[command]
+pub fn git_branches(cwd: String) -> Result<GitBranches, String> {
+    let current = run_git(&cwd, &["rev-parse", "--abbrev-ref", "HEAD"])?
+        .trim()
+        .to_string();
+    let local_raw = run_git(
+        &cwd,
+        &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    )?;
+    let remote_raw = run_git(
+        &cwd,
+        &["for-each-ref", "--format=%(refname:short)", "refs/remotes"],
+    )?;
+    let local: Vec<String> = local_raw
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    let remote: Vec<String> = remote_raw
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty() && !l.ends_with("/HEAD"))
+        .collect();
+    Ok(GitBranches {
+        current,
+        local,
+        remote,
+    })
+}
+
+/// Switch branches, or create a new one from HEAD when `create` is true. Git
+/// refuses to switch when uncommitted changes would be overwritten and returns
+/// that as an error, so the user's work is never silently clobbered.
+#[command]
+pub fn git_checkout(cwd: String, branch: String, create: bool) -> Result<(), String> {
+    let b = branch.trim();
+    if b.is_empty() {
+        return Err("Branch name is empty.".into());
+    }
+    let args: Vec<&str> = if create {
+        vec!["checkout", "-b", b]
+    } else {
+        vec!["checkout", b]
+    };
+    run_git(&cwd, &args).map(|_| ())
+}
+
+/// Discard all uncommitted changes to one tracked file, reverting both the index
+/// and the working tree to the HEAD version (`git checkout HEAD -- <path>`).
+/// Untracked files aren't in HEAD and are deleted through `fs_delete` instead, so
+/// this is only offered for tracked, modified files.
+#[command]
+pub fn git_restore_file(cwd: String, path: String) -> Result<(), String> {
+    let p = path.trim();
+    if p.is_empty() {
+        return Err("Path is empty.".into());
+    }
+    run_git(&cwd, &["checkout", "HEAD", "--", p]).map(|_| ())
+}
