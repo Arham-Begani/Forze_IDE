@@ -1,0 +1,22 @@
+{
+  "name": "forze-debug-room",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "build": "esbuild sdk-entry.mjs --bundle --format=esm --target=es2020 --minify --outfile=public/vendor/nexconn.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@nexconn/chat": "26.2.1",
+    "@nexconn/engine": "26.2.1",
+    "@vercel/blob": "2.9.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.5"
+  }
+}

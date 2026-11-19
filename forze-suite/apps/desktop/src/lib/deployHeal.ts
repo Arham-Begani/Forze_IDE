@@ -161,6 +161,7 @@ export async function deployWithAutoFix(opts: {
   target?: 'production';
   autoFix: boolean;
   maxAttempts?: number;
+  onDeployment?: (id: string) => void;
   onPhase?: (phase: string) => void;
   onLog?: (line: string) => void;
 }): Promise<HealResult> {
@@ -181,6 +182,7 @@ export async function deployWithAutoFix(opts: {
       target: opts.target,
       onProgress: (p) => onPhase(p.phase),
     });
+    opts.onDeployment?.(id);
     lastUrl = url;
     onLog(`Deployed → ${url}`);
 

@@ -1,0 +1,17 @@
+{
+  "framework": null,
+  "installCommand": "npm install --workspaces=false",
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "functions": { "api/room.mjs": { "includeFiles": "fixture/**", "maxDuration": 30 } },
+  "rewrites": [
+    { "source": "/api/sample", "destination": "/api/room?route=/api/sample" },
+    { "source": "/api/rooms/:path*", "destination": "/api/room?route=/api/rooms/:path*" },
+    { "source": "/r/:id", "destination": "/index.html" }
+  ],
+  "headers": [{ "source": "/(.*)", "headers": [
+    { "key": "Referrer-Policy", "value": "no-referrer" },
+    { "key": "X-Frame-Options", "value": "DENY" },
+    { "key": "X-Content-Type-Options", "value": "nosniff" }
+  ] }]
+}

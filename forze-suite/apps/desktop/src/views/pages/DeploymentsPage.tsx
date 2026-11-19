@@ -1,3 +1,6 @@
+import { DebugRoomPanel, roomLink, type FailedBuild } from './DebugRoomPanel';
+import { openExternal } from '../../lib/openLink';
+import { currentUserId } from '../../workbench/authStore';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowUpCircle,
@@ -86,6 +89,11 @@ export default function DeploymentsPage(): JSX.Element {
   const setActiveActivity = useWorkbench((s) => s.setActiveActivity);
 
   const connected = token.length > 0;
+  const [help, setHelp] = useState<FailedBuild | null>(null);
+  const [folderFailure, setFolderFailure] = useState<FailedBuild | null>(null);
+  const [reruns, setReruns] = useState<Record<string,string>>({});
+  const runKey = (id: string) => ['forze-room-rerun',currentUserId(),teamId,id].join(':');
+  useEffect(() => { setHelp(null); setFolderFailure(null); }, [projectId,teamId,token]);
 
   const [username, setUsername] = useState<string | null>(null);
   const [projects, setProjects] = useState<VercelProject[]>([]);
@@ -221,7 +229,7 @@ export default function DeploymentsPage(): JSX.Element {
   };
 
   /** Deploy the folder currently open in the IDE as its own Vercel project. */
-  const deployFolder = async () => {
+  const deployFolder = async (roomSource?: FailedBuild) => {
     if (!connected) {
       setActiveActivity('settings');
       return;
@@ -231,6 +239,11 @@ export default function DeploymentsPage(): JSX.Element {
       return;
     }
     const name = toProjectName(basename(workspaceRoot));
+    if (roomSource && roomSource.name !== name) {
+      toast('Open the folder for this failed project first.', 'warn'); return;
+    }
+    let lastDeployment = '';
+    setFolderFailure(null);
     setFolderDeploying(true);
     setFolderProgress('Scanning…');
     setFolderLog([`Deploying "${name}"${autoFix ? ' with auto-fix' : ''}…`]);
@@ -243,9 +256,18 @@ export default function DeploymentsPage(): JSX.Element {
         teamId: teamId || undefined,
         target: 'production',
         autoFix,
+        onDeployment: (id) => {
+          lastDeployment = id;
+          if (roomSource) {
+            const key = runKey(roomSource.uid);
+            setReruns(prev => ({...prev,[key]:id}));
+            localStorage.setItem(key,id);
+          }
+        },
         onPhase: (phase) => setFolderProgress(phase),
         onLog: log,
       });
+      if (result.state === 'ERROR' && lastDeployment) setFolderFailure({uid:lastDeployment,name});
       if (result.state === 'READY') {
         const fixed = result.fixes.reduce((n, f) => n + f.length, 0);
         toast(
@@ -382,6 +404,10 @@ export default function DeploymentsPage(): JSX.Element {
           </div>
         )}
 
+        {connected && help && <DebugRoomPanel key={help.uid} deployment={help} token={token} team={teamId || undefined}
+          onClose={() => setHelp(null)} onDeploy={() => void deployFolder(help)}
+          canDeploy={!folderDeploying && !deploying && !!workspaceRoot && toProjectName(basename(workspaceRoot)) === help.name}
+          rerun={reruns[runKey(help.uid)] ?? localStorage.getItem(runKey(help.uid)) ?? undefined} />}
         {folderLog.length > 0 && (
           <div className="appcard" style={{ padding: 0, overflow: 'hidden' }}>
             <div
@@ -399,6 +425,7 @@ export default function DeploymentsPage(): JSX.Element {
                 <Rocket size={13} color="var(--color-accent)" />
               )}
               <strong style={{ fontSize: 12 }}>Deploy log</strong>
+              {folderFailure && <button className="btn-outline" onClick={() => setHelp(folderFailure)}>Ask for help</button>}
               {folderDeploying && folderProgress && (
                 <span style={{ fontSize: 11, color: 'var(--color-text-dim)' }}>{folderProgress}</span>
               )}
@@ -460,7 +487,7 @@ export default function DeploymentsPage(): JSX.Element {
                 )}
                 {rows.map((d) => (
                   <tr key={d.uid}>
-                    <td>{liveStatusPill(d.state)}</td>
+                    <td>{liveStatusPill(d.state)} {d.state === 'ERROR' && <button className="btn-outline" onClick={() => setHelp(d)}>Ask for help</button>}</td>
                     <td>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <GitBranch size={12} color="var(--color-text-dim)" />
@@ -551,7 +578,8 @@ export default function DeploymentsPage(): JSX.Element {
               <tbody>
                 {demoDeployments.map((d) => (
                   <tr key={d.id}>
-                    <td>{demoStatusPill(d.status)}</td>
+                    <td>{demoStatusPill(d.status)} {d.status === 'error' && <button className="btn-outline"
+                      onClick={() => void openExternal(roomLink().href)}>Open debugging sample</button>}</td>
                     <td>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <GitBranch size={12} color="var(--color-text-dim)" />

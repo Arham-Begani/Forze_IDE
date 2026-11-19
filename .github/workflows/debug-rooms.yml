@@ -1,0 +1,35 @@
+name: Debug room submission
+on:
+  push:
+    branches: [feature/nexconn-debug-rooms]
+    paths: ['integrations/debug-room/**', '.github/workflows/debug-rooms.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/debug-room
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build && npm test
+      - name: Pack standalone room with the official browser SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          cp -r public fixture test "$RUNNER_TEMP/package/"
+          cp *.mjs *.json *.md .env.example Dockerfile "$RUNNER_TEMP/package/"
+          cp submission.pdf "$RUNNER_TEMP/package/" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forze-debug-room
+          path: ${{ runner.temp }}/package/
+          include-hidden-files: true
+          retention-days: 14

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>Debug Rooms · Forze IDE</title><link rel="stylesheet" href="/room.css"></head>
+<body><header class="bar"><a class="brand" href="/" aria-label="Forze home"><i aria-hidden="true">F</i> Forze <span> / </span> <b>Debug rooms</b></a><span id="seat">Workplace</span></header>
+<main id="main"><section id="loading"><h1>Opening workspace…</h1></section>
+<section id="landing" hidden>
+<div class="eyebrow">Deployments <span>/</span> Sample project</div><h1>Orbit storefront</h1>
+<p class="muted">A one-file import error in a runnable Node storefront.</p>
+<article><div class="row"><h2>Deployment <code>sample-001</code></h2><span class="pill bad">Failed</span></div>
+<h3>Build output</h3><pre id="logs"></pre><button id="ask">Ask for help</button></article>
+<article id="selection" hidden><h2>Choose what to share</h2><p class="muted">Only checked diagnostics appear in the room.</p><div id="choices"></div><h3>Teammate preview</h3><div class="preview"><strong id="previewTitle"></strong><pre id="preview"></pre></div><button id="create" disabled>Create debugging room</button></article></section>
+<section id="room" hidden><div class="eyebrow" id="kind"></div><h1 id="title"></h1>
+<div class="layout"><div>
+<article><div class="row"><h2>Original error</h2><span class="pill bad">Failed</span></div><pre id="excerpt"></pre></article>
+<article class="conversation"><div class="row"><h2>Conversation</h2><span class="pill" id="connection" role="status">Connecting</span></div><p id="chatError" role="alert" class="notice" hidden></p><button class="secondary" id="retry" hidden>Reconnect chat</button><button class="secondary" id="older" hidden>Load earlier replies</button>
+<div id="messages" aria-label="Messages" aria-live="polite"></div><form id="composer"><label for="draft">Message</label><textarea id="draft" maxlength="2000" rows="2" placeholder="Suggest a fix…"></textarea><div class="row"><small>Nexconn Chat</small><button id="send" disabled>Send reply</button></div></form></article></div>
+<aside><article id="sharing" hidden><h2>Invite a teammate</h2><p id="joined" class="muted">Open the invite in another browser or a private window.</p><button id="invite" class="secondary">Get invite link</button><div id="linkBox" hidden><label for="inviteUrl">Single-use invite</label><input id="inviteUrl" readonly><button class="secondary" id="copy">Copy link</button></div></article>
+<article><h2>Accepted solution</h2><p id="solution">Waiting for the developer to accept a reply.</p></article>
+<article><h2>Latest rerun</h2><p id="status">No rerun recorded.</p><a id="artifact" hidden target="_blank" rel="noreferrer">Open built storefront ↗</a>
+<form id="sampleFix" hidden><label for="module">Import in storefront.mjs</label><select id="module"><option>./prcing.mjs</option><option>./pricing.mjs</option></select><p class="muted">Available file <code>pricing.mjs</code></p><button>Build &amp; deploy sample</button></form>
+<p id="ideNote" class="muted" hidden>Apply the fix in Forze, then share the observed rerun from Deployments.</p></article></aside></div></section>
+<section id="invalid" hidden><div class="eyebrow">Room access</div><h1>Unable to open room</h1><p id="reason"></p><a href="/">Open sample project</a></section>
+<p id="error" class="notice" role="alert" hidden></p></main><script type="module" src="/app.mjs"></script></body></html>
