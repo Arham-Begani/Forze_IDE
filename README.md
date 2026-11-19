@@ -78,3 +78,7 @@ See [`features.md`](features.md) for the complete feature list and [`ide_plan.md
 ---
 
 > Long-term goal: become **the place where internet startups are built** — not just another AI IDE.
+
+## Deployment debugging rooms
+
+Open a failed deployment, share a selected diagnostic and invite one teammate into a browser room. The [judge entry and setup guide](integrations/debug-room/README.md) includes a reproducible storefront build and a 90-second demo.

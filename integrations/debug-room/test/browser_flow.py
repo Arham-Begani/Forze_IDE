@@ -78,6 +78,34 @@ with sync_playwright() as playwright:
         expect(outsider.locator(".message")).to_have_count(0)
     outsider.goto(original_url)
     expect(outsider.locator("#invalid")).to_be_visible()
+    if not args.live:
+        # Exercise the actual composer with a rejected transport acknowledgement.
+        # These routes exist only in the test browser. No fake transport is shipped.
+        from json import dumps
+        failed = developer.new_page()
+        failed.route("**/api/rooms/*/chat", lambda route: route.fulfill(
+            content_type="application/json", body=dumps({"appKey":"test","token":"test","self":"dev","peer":"guest","area":"SG"})))
+        failed.route("**/vendor/nexconn.js", lambda route: route.fulfill(
+            content_type="application/javascript", body="""
+              export const AreaCode={SG:1},ConnectionStatus={CONNECTED:0},MessageType={TEXT:'text'};
+              export class MessageHandler{constructor(p){Object.assign(this,p)}}
+              export const ConnectionStatusHandler=MessageHandler,SendTextMessageParams=MessageHandler;
+              export const NCEngine={initialize(){},addMessageHandler(){},addConnectionStatusHandler(){},async connect(){return {code:0,data:{userId:'dev'}}}};
+              export const BaseChannel={createMessagesQuery:()=>({loadNextPage:async()=>({code:0,data:{data:[]}})})};
+              let attempts=0;
+              export class DirectChannel {identifier={}; async sendMessage(p){return ++attempts===1 ? {code:503} :
+                {code:0,data:{messageId:'unit-retry',sentTime:1,channelId:'guest',senderUserId:'dev',messageType:'text',content:{text:p.text}}}}}
+            """))
+        failed.goto(original_url)
+        failed.locator("#draft").fill("Recoverable test draft")
+        failed.locator("#send").click()
+        expect(failed.locator("#chatError")).to_contain_text("not confirmed")
+        expect(failed.locator("#draft")).to_have_value("Recoverable test draft")
+        expect(failed.locator(".message")).to_have_count(0)
+        failed.locator("#send").click()
+        expect(failed.locator(".message")).to_have_count(1)
+        expect(failed.locator("#draft")).to_have_value("")
+        print("PASS — browser test double: rejected acknowledgement, retained draft, successful retry.")
     browser.close()
     print("PASS — two independent seats, excerpt, refresh, invite replay, isolation, real sample failure/fix/build.")
     print("PASS — official Nexconn bidirectional delivery, remote history and accepted reply." if args.live else
