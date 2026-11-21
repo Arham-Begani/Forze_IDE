@@ -15,6 +15,21 @@ with sync_playwright() as playwright:
     host.set_default_timeout(20000)
     guest.set_default_timeout(20000)
     host.goto(args.url)
+    # Load the shipped SDK before any test-only transport interception. This
+    # catches broken browser bundles even when no Nexconn credentials are set.
+    host.evaluate("""async () => {
+        const sdk = await import('/vendor/nexconn.js');
+        const methods = [sdk.NCEngine.initialize, sdk.NCEngine.connect,
+                         sdk.NCEngine.addMessageHandler, sdk.NCEngine.addConnectionStatusHandler,
+                         sdk.BaseChannel.createMessagesQuery, sdk.DirectChannel,
+                         sdk.SendTextMessageParams, sdk.MessageHandler, sdk.ConnectionStatusHandler];
+        if (methods.some(method => typeof method !== 'function') ||
+            sdk.AreaCode.SG === undefined || sdk.MessageType.TEXT === undefined ||
+            sdk.ConnectionStatus.CONNECTED === undefined) {
+            throw new Error('Nexconn browser SDK exports are incomplete');
+        }
+    }""")
+    print("PASS — official Nexconn browser SDK imports without credentials.")
     host.get_by_role("button", name="Ask for help").click()
     choice = host.get_by_role("checkbox").first
     expect(host.locator("#create")).to_be_disabled()

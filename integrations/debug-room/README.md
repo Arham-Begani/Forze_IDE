@@ -8,7 +8,7 @@ Use Node 22 LTS. From the repository root:
 
 ```sh
 cd integrations/debug-room
-npm install
+npm ci
 npm run build
 ```
 
@@ -42,7 +42,7 @@ Apply the fix in the editor. With the matching project folder open, choose **Dep
 
 ## Hosting
 
-A single Node instance can persist room metadata in `ROOM_DATA_DIR`. Mount a durable volume there, terminate HTTPS at the proxy and set `PUBLIC_ORIGIN` to the canonical HTTPS origin. Expose port `PORT` (default 4174). The Dockerfile includes the bundled SDK. A downloadable CI archive that already contains `public/vendor/nexconn.js` runs locally with `node --env-file=.env server.mjs` without installing build tools.
+A single Node instance can persist room metadata in `ROOM_DATA_DIR`. Mount a durable volume there, terminate HTTPS at the proxy and set `PUBLIC_ORIGIN` to the canonical HTTPS origin. Expose port `PORT` (default 4174). The Dockerfile includes the bundled SDK. The browser build aliases the engine package’s Node-only `path` reference to `path-browserify`; the official SDK packages remain pinned and unmodified. A downloadable CI archive that already contains `public/vendor/nexconn.js` runs locally with `node --env-file=.env server.mjs` without installing build tools.
 
 For Vercel, set the project root to `integrations/debug-room`, use Node 22 and the included `vercel.json`. Attach a **private** Vercel Blob store to this project so the function receives `BLOB_READ_WRITE_TOKEN`. Add the three Nexconn settings and deploy. Private Blob uses uncached reads and conditional writes to protect concurrent updates. A serverless deployment needs the private store. Local files are intended for single-instance hosts.
 

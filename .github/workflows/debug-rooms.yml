@@ -19,13 +19,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run build && npm test
       - name: Pack standalone room with the official browser SDK
         run: |
           mkdir -p "$RUNNER_TEMP/package"
           cp -r public fixture test api "$RUNNER_TEMP/package/"
-          cp *.mjs *.json *.md .env.example Dockerfile "$RUNNER_TEMP/package/"
+          cp *.mjs *.json *.md .env.example .dockerignore .gitignore Dockerfile "$RUNNER_TEMP/package/"
           cp submission.pdf submission.html "$RUNNER_TEMP/package/"
       - uses: actions/upload-artifact@v4
         with:
