@@ -1,6 +1,7 @@
 """Run against a running room service. --live requires real Nexconn credentials."""
 import argparse
 import os
+import re
 from playwright.sync_api import sync_playwright, expect
 
 parser = argparse.ArgumentParser()
@@ -39,7 +40,9 @@ with sync_playwright() as playwright:
     expect(host.locator("#room")).to_be_visible()
     original_url = host.url
     host.locator("#invite").click()
-    link = host.locator("#inviteUrl").input_value()
+    invite = host.locator("#inviteUrl")
+    expect(invite).to_have_value(re.compile(r"^https?://[^#]+#invite=[A-Za-z0-9_-]+$"))
+    link = invite.input_value()
     outsider.goto(link.split("#")[0] + "#invite=invalid")
     expect(outsider.locator("#reason")).to_contain_text("invite")
     guest.goto(link)
